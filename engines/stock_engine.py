@@ -7,6 +7,8 @@ re-downloading. Returns a local Path to the clip, or None if unavailable.
 import hashlib
 import logging
 import os
+import random
+from datetime import date
 from pathlib import Path
 
 import requests
@@ -23,12 +25,15 @@ class StockEngine:
         self._key = os.environ.get("PEXELS_API_KEY", "")
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    def fetch(self, keywords: list[str], orientation: str = "landscape", min_duration: int = 5) -> Path:
+    def fetch(self, keywords: list[str], orientation: str = "landscape", min_duration: int = 5, variant: str = "") -> Path:
         query = " ".join(keywords[:3])
-        cache_key = hashlib.md5(f"{query}:{orientation}".encode()).hexdigest()[:12]
+        # Include today's date + variant (scene id) so each scene gets its own independent clip,
+        # even when multiple scenes share the same visual keywords.
+        today = date.today().isoformat()
+        cache_key = hashlib.md5(f"{query}:{orientation}:{today}:{variant}".encode()).hexdigest()[:12]
         cached = CACHE_DIR / f"{cache_key}.mp4"
         if cached.exists() and cached.stat().st_size > 10_000:
-            log.info(f"  Stock cache hit: {query}")
+            log.info(f"  Stock cache hit: {query} [{variant}] ({today})")
             return cached
         return self._download(query, cached, orientation, min_duration)
 
@@ -61,6 +66,7 @@ class StockEngine:
 
 
 def _best_clip_url(videos: list, min_duration: int) -> str:
+    candidates = []
     for v in videos:
         if v.get("duration", 0) < min_duration:
             continue
@@ -71,5 +77,6 @@ def _best_clip_url(videos: list, min_duration: int) -> str:
         )
         hd = [f for f in files if f.get("quality") in ("hd", "sd")]
         if hd:
-            return hd[0]["link"]
-    return None
+            candidates.append(hd[0]["link"])
+    # Pick randomly so different scenes get different footage, not always the first result
+    return random.choice(candidates) if candidates else None

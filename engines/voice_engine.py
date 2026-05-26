@@ -69,7 +69,12 @@ class VoiceEngine:
             }
             r = requests.post(ELEVENLABS_TTS_URL, headers=headers, json=payload, timeout=120)
             if r.status_code != 200:
-                log.warning(f"  ElevenLabs HTTP {r.status_code}: {r.text[:200]}")
+                log.warning(f"  ElevenLabs HTTP {r.status_code}: {r.text}")
+                return False
+            # Guard against ElevenLabs returning JSON error with 200 status
+            content_type = r.headers.get("content-type", "")
+            if "application/json" in content_type:
+                log.warning(f"  ElevenLabs returned JSON instead of audio: {r.text}")
                 return False
             out_path.write_bytes(r.content)
             log.info(f"  ElevenLabs saved → {out_path.name} ({out_path.stat().st_size // 1024} KB)")

@@ -5,9 +5,10 @@ NacArtha Cinematic Pipeline
 → Translated to Hindi + Telugu (same visuals, different ElevenLabs audio)
 → Uploaded to 3 separate YouTube channels
 
-Stock footage: Pexels API (free)
-AI hero shots: Runway Gen-3 (1 per format = 2 clips/day)
-Voices: ElevenLabs multilingual_v2 → Edge TTS fallback
+Hero shots:      Seedance 1.0 on Replicate (1 per format = 2 clips/day)
+Scene footage:   OpenArtEngine — FLUX image → Ken Burns video (Replicate)
+                 Falls back to StockEngine (Pexels) if REPLICATE_API_KEY unset or FLUX fails
+Voices:          ElevenLabs multilingual_v2 → Edge TTS fallback
 """
 import argparse
 import json
@@ -24,7 +25,8 @@ from engines.script_engine import ScriptEngine
 from engines.topic_selector import TopicSelector
 from engines.voice_engine import VoiceEngine
 from engines.stock_engine import StockEngine
-from engines.runway_engine import RunwayEngine
+from engines.openart_engine import OpenArtEngine
+from engines.seedance_engine import SeedanceEngine
 from engines.video_assembler import VideoAssembler
 from engines.thumbnail_engine import ThumbnailEngine
 from engines.music_engine import MusicEngine
@@ -63,8 +65,9 @@ def main():
     topic_selector   = TopicSelector()
     script_engine    = ScriptEngine()
     voice_engine     = VoiceEngine()
-    stock_engine     = StockEngine()
-    runway_engine    = RunwayEngine()
+    stock_engine     = StockEngine()      # free Pexels fallback
+    openart_engine   = OpenArtEngine()    # primary: FLUX image → video (Replicate)
+    seedance_engine  = SeedanceEngine()   # hero shots: AI video (Replicate)
     assembler        = VideoAssembler()
     thumbnail_engine = ThumbnailEngine()
     music_engine     = MusicEngine()
@@ -99,8 +102,8 @@ def main():
 
     # ── 3. Fetch video clips (shared — same visuals for all 3 channels) ─────────
     log.info("Fetching video clips…")
-    clips_long  = _fetch_clips(en_script["long_scenes"],  run_dir, "long",  stock_engine, runway_engine)
-    clips_short = _fetch_clips(en_script["short_scenes"], run_dir, "short", stock_engine, runway_engine)
+    clips_long  = _fetch_clips(en_script["long_scenes"],  run_dir, "long",  stock_engine, openart_engine, seedance_engine)
+    clips_short = _fetch_clips(en_script["short_scenes"], run_dir, "short", stock_engine, openart_engine, seedance_engine)
 
     # ── 4. Per-channel pipeline ─────────────────────────────────────────────────
     results = {}
@@ -217,29 +220,39 @@ def _fetch_clips(
     run_dir: Path,
     label: str,
     stock_engine: StockEngine,
-    runway_engine: RunwayEngine,
+    openart_engine: OpenArtEngine,
+    seedance_engine: SeedanceEngine,
 ) -> dict:
     clips: dict[int, Path] = {}
     clip_dir = run_dir / "clips" / label
     clip_dir.mkdir(parents=True, exist_ok=True)
-    runway_used = 0  # max 1 hero shot per format
+    hero_used   = 0   # max 1 Seedance hero shot per format
+    orientation = "portrait" if label == "short" else "landscape"
 
     for scene in scenes:
-        sid = scene["id"]
+        sid       = scene["id"]
         clip_path = clip_dir / f"scene_{sid:03d}.mp4"
+        result    = None
 
-        if scene.get("is_hero_shot") and runway_used < 1:
+        # ── Hero shot: Seedance AI video (1 per format) ──────────────────────
+        if scene.get("is_hero_shot") and hero_used < 1:
             visual = " ".join(scene.get("visual_keywords", []))
-            orientation = "portrait" if label == "short" else "landscape"
-            result = runway_engine.generate(visual, clip_path, orientation)
+            result = seedance_engine.generate(visual, clip_path, orientation)
             if result:
+                hero_used += 1
                 clips[sid] = result
-                runway_used += 1
                 continue
+            log.warning(f"  Seedance hero shot failed for scene {sid} — falling through to OpenArt")
 
+        # ── Regular scenes: OpenArt (FLUX image → video) → Pexels fallback ──
         keywords = scene.get("visual_keywords", ["finance", "market", "money"])
-        orientation = "portrait" if label == "short" else "landscape"
-        result = stock_engine.fetch(keywords, orientation)
+        variant  = f"{label}_{sid}"
+
+        result = openart_engine.fetch(keywords, orientation, variant=variant)
+
+        if not result:
+            result = stock_engine.fetch(keywords, orientation, variant=variant)
+
         if result:
             clips[sid] = result
         else:

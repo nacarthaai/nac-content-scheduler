@@ -11,3 +11,4 @@ cache/
 *.jpeg
 *.zip
 .env
+client_secret.json
