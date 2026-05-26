@@ -41,8 +41,9 @@ class VideoAssembler:
             scene_paths = []
             for i, scene in enumerate(scenes):
                 scene_out = tmp / f"scene_{i:03d}.mp4"
-                overlay = scene.get("text_overlay") or ""
-                extra = hook_text if i == 0 else (cta_text if i == len(scenes) - 1 else "")
+                overlay   = scene.get("text_overlay") or ""
+                extra     = hook_text if i == 0 else (cta_text if i == len(scenes) - 1 else "")
+                pace      = scene.get("pace", "normal")
                 self._build_scene(
                     video=Path(scene["video_path"]),
                     audio=Path(scene["narration_path"]),
@@ -51,6 +52,7 @@ class VideoAssembler:
                     overlay=overlay,
                     extra_text=extra,
                     scene_idx=i,
+                    pace=pace,
                 )
                 scene_paths.append(scene_out)
 
@@ -67,24 +69,63 @@ class VideoAssembler:
         return out_path
 
     def _build_scene(self, video: Path, audio: Path, out: Path,
-                     w: int, h: int, overlay: str, extra_text: str, scene_idx: int):
+                     w: int, h: int, overlay: str, extra_text: str, scene_idx: int,
+                     pace: str = "normal"):
         duration = _audio_duration(audio)
         if duration <= 0:
             duration = 8.0
 
-        # Ken Burns: alternate pan direction per scene (odd→right, even→left)
         pan_dir = 1 if scene_idx % 2 == 0 else -1
-        sw, sh = int(w * 1.12), int(h * 1.12)
 
-        vf = (
-            f"fps=30,"
-            f"scale={sw}:{sh}:force_original_aspect_ratio=increase,"
-            f"crop={w}:{h}:"
-            f"x='(iw-ow)/2+((iw-ow)/3)*({pan_dir})*min(t/{duration:.3f},1)':"
-            f"y='(ih-oh)/2',"
-            f"fade=t=in:st=0:d={FADE_DUR},"
-            f"fade=t=out:st={max(0.1, duration - FADE_DUR):.3f}:d={FADE_DUR}"
-        )
+        if pace == "hook":
+            # Aggressive zoom + fast pan — grabs attention immediately, no slow warmup
+            sw, sh  = int(w * 1.25), int(h * 1.25)
+            fast_t  = max(0.1, duration * 0.55)
+            vf = (
+                f"fps=30,"
+                f"scale={sw}:{sh}:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h}:"
+                f"x='(iw-ow)/2+((iw-ow)/3)*({pan_dir})*min(t/{fast_t:.3f},1)':"
+                f"y='(ih-oh)/2',"
+                f"fade=t=in:st=0:d=0.12,"
+                f"fade=t=out:st={max(0.1, duration - 0.2):.3f}:d=0.2"
+            )
+        elif pace == "reveal":
+            # Slow zoom-in during the scene + white flash out — signals a key moment
+            sw, sh = int(w * 1.18), int(h * 1.18)
+            vf = (
+                f"fps=30,"
+                f"scale={sw}:{sh}:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h}:"
+                f"x='(iw-ow)/2':"
+                f"y='(ih-oh)/2-((ih-oh)/5)*min(t/{max(0.1, duration):.3f},1)',"
+                f"fade=t=in:st=0:d={FADE_DUR},"
+                f"fade=t=out:st={max(0.1, duration - 0.2):.3f}:d=0.2:color=white"
+            )
+        elif pace == "cta":
+            # Centered slow zoom, no pan — calm, focused close
+            sw, sh = int(w * 1.15), int(h * 1.15)
+            vf = (
+                f"fps=30,"
+                f"scale={sw}:{sh}:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h}:"
+                f"x='(iw-ow)/2':"
+                f"y='(ih-oh)/2',"
+                f"fade=t=in:st=0:d={FADE_DUR},"
+                f"fade=t=out:st={max(0.1, duration - FADE_DUR):.3f}:d={FADE_DUR}"
+            )
+        else:
+            # normal — steady Ken Burns pan, alternating direction
+            sw, sh = int(w * 1.12), int(h * 1.12)
+            vf = (
+                f"fps=30,"
+                f"scale={sw}:{sh}:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h}:"
+                f"x='(iw-ow)/2+((iw-ow)/3)*({pan_dir})*min(t/{duration:.3f},1)':"
+                f"y='(ih-oh)/2',"
+                f"fade=t=in:st=0:d={FADE_DUR},"
+                f"fade=t=out:st={max(0.1, duration - FADE_DUR):.3f}:d={FADE_DUR}"
+            )
 
         base = out.with_stem(out.stem + "_base")
         png  = out.with_stem(out.stem + "_ovr")
@@ -106,7 +147,7 @@ class VideoAssembler:
             ])
 
             # Pass 2 — Pillow text overlay (watermark + scene text + hook/CTA)
-            _make_text_png(overlay, extra_text, w, h, png)
+            _make_text_png(overlay, extra_text, w, h, png, pace=pace)
             _run([
                 "ffmpeg", "-y",
                 "-i", str(base),
@@ -145,7 +186,7 @@ class VideoAssembler:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _make_text_png(overlay: str, extra_text: str, w: int, h: int, out_path: Path):
+def _make_text_png(overlay: str, extra_text: str, w: int, h: int, out_path: Path, pace: str = "normal"):
     img  = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
@@ -155,17 +196,30 @@ def _make_text_png(overlay: str, extra_text: str, w: int, h: int, out_path: Path
     wm_w    = wm_bb[2] - wm_bb[0]
     draw.text((w - wm_w - 24, 24), WATERMARK, fill=(255, 255, 255, 170), font=wm_font)
 
-    # Scene text overlay — bottom center, semi-transparent box
+    # Scene text overlay — bottom center
+    # reveal: larger gold text to make the stat pop; others: white normal size
     if overlay:
-        ov_font = _font(44)
-        ov_bb   = draw.textbbox((0, 0), overlay, font=ov_font)
-        ov_w    = ov_bb[2] - ov_bb[0]
-        ov_h    = ov_bb[3] - ov_bb[1]
+        if pace == "reveal":
+            ov_font  = _font(62)
+            ov_color = (255, 215, 0, 255)    # gold — signals importance
+            box_fill = (0, 0, 0, 200)
+            padding  = (24, 16)
+        else:
+            ov_font  = _font(44)
+            ov_color = (255, 255, 255, 255)
+            box_fill = (0, 0, 0, 170)
+            padding  = (18, 12)
+
+        ov_bb = draw.textbbox((0, 0), overlay, font=ov_font)
+        ov_w  = ov_bb[2] - ov_bb[0]
+        ov_h  = ov_bb[3] - ov_bb[1]
         x = (w - ov_w) // 2
         y = h - ov_h - 90
-        draw.rectangle([x - 18, y - 12, x + ov_w + 18, y + ov_h + 12],
-                       fill=(0, 0, 0, 170))
-        draw.text((x, y), overlay, fill=(255, 255, 255, 255), font=ov_font)
+        draw.rectangle(
+            [x - padding[0], y - padding[1], x + ov_w + padding[0], y + ov_h + padding[1]],
+            fill=box_fill,
+        )
+        draw.text((x, y), overlay, fill=ov_color, font=ov_font)
 
     # Hook / CTA — center screen, gold
     if extra_text:

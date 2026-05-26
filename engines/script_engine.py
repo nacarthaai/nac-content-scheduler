@@ -26,8 +26,9 @@ _JSON_SCHEMA = """
     {{
       "id": 1,
       "narration": "3-5 sentences, 25-35 words",
-      "visual_keywords": ["keyword1", "keyword2", "keyword3"],
+      "visual_keywords": ["cinematic scene description matching this scene's narration"],
       "emotion": "clarity",
+      "pace": "hook",
       "is_hero_shot": false,
       "text_overlay": "key stat or concept ≤6 words or null"
     }}
@@ -41,9 +42,17 @@ _RULES = """Rules:
 - long_scenes: exactly 10 scenes, narration total ~290-320 words
 - short_scenes: exactly 3 scenes, narration total ~70-90 words
 - emotion: one of clarity | curiosity | confidence | focus | excitement | insight | tension
+- pace: one of hook | normal | reveal | cta — this controls visual speed and transition style
+  * hook  → scene 1 ALWAYS. Open mid-action: shocking stat, bold claim, or provocative question. NO intro, NO "today we cover". First sentence must stop a scrolling thumb.
+  * reveal → scenes where you drop a key number, answer an open loop, or land a surprising fact. Use 2-4× per long video, 1× per short.
+  * cta   → last scene ALWAYS. Direct and urgent.
+  * normal → everything else
+- Open loops: in scenes 2-4, plant a question or tease ("I'll show you the exact number in a moment — but you won't expect it"). Answer it in a later reveal scene. This is the #1 retention tool.
+- Sentence rhythm: mix 4-word punches with longer sentences. Never 3 sentences the same length in a row.
 - Mark exactly 1 long_scene and 1 short_scene as is_hero_shot: true
-- visual_keywords: 3-6 words describing a vivid AI image/video scene that matches THIS scene's narration content. Write it as a natural language visual prompt — specific, cinematic, descriptive. Examples: "glowing RSI chart crossing oversold on dark terminal", "algorithmic trade executing green profit flash Bloomberg screen", "Python code scrolling on monitor in dark server room", "gold candlestick breakout pattern dramatic lighting", "risk dashboard red stop-loss triggered portfolio heatmap". Each scene must have a DIFFERENT visual — no two scenes share the same image.
-- NO filler like "in this video" or "don't forget to subscribe"
+- visual_keywords: one vivid natural-language prompt describing the AI image/video for THIS scene — specific, cinematic, matches the narration. Examples: "glowing RSI oscillator crossing oversold threshold dark Bloomberg terminal", "Python momentum signal triggering buy order green flash on screen", "gold candlestick breakout pattern dramatic cinematic lighting close-up". Every scene must have a DIFFERENT visual.
+- short_scenes: scene 1 must open IMMEDIATELY — no warmup. Shorts viewers decide in 2 seconds.
+- NO filler: no "in this video", "don't forget to subscribe", "stay tuned"
 - OUTPUT: Return ONLY valid JSON — no explanation, no markdown fences"""
 
 # ── Shared persona injected into every prompt ─────────────────────────────────
@@ -71,9 +80,10 @@ This builds trust with viewers who are following the bot's journey.
 
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
-- Hook (scene 1): Lead with the most interesting thing that happened — a decision, a number, a moment
+- Hook (scene 1): Lead with the single most interesting thing — a specific number, a decision, a moment of tension. No intro.
+- Plant an open loop in scene 2-3, resolve it as a reveal scene mid-video
 - Scenes: what happened → signals involved → what I did or didn't do → risk management → key takeaway
-- text_overlay: show P&L %, signal values, trade counts, key rules"""
+- text_overlay: P&L %, signal values, trade counts, key rules — every reveal scene must have a stat overlay"""
 
 # ── Tue: Daily recap (live Alpaca data injected) ──────────────────────────────
 _DAILY_RECAP_PROMPT = _NAC_PERSONA + """
@@ -88,10 +98,10 @@ What did risk management block? What does today's result mean for the strategy?
 
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
-- Hook (scene 1): Today's bottom line — P&L, trade count, or the key moment
+- Hook (scene 1): Start with today's bottom line number — P&L, trades fired, or the one moment that defined the day. No warmup.
+- Scene 2-3: plant an open loop about WHY something happened — resolve it as a reveal scene after the midpoint
 - Scenes: market open → signals scanned → trades taken → risk moments → close → lesson
-- Use real symbols and numbers from the data; be specific
-- text_overlay: P&L %, trade counts, signal values"""
+- Use real symbols and numbers; every reveal scene must show the exact figure as text_overlay"""
 
 # ── Sat: Weekly recap ─────────────────────────────────────────────────────────
 _WEEKLY_RECAP_PROMPT = _NAC_PERSONA + """
@@ -106,10 +116,10 @@ Be transparent — viewers are following this journey and they deserve honest nu
 
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
-- Hook (scene 1): Weekly bottom line — total P&L, win rate, or the week's defining moment
+- Hook (scene 1): Open with the week's single most dramatic number — best trade, worst day, net P&L. No intro.
+- Plant an open loop about the worst moment in scene 2 — reveal exactly what happened (and why) as a reveal scene
 - Scenes: week overview → best day → worst day → risk management moments → what I learned → next week
-- Include weekly totals: trades taken, win rate, drawdown, net P&L
-- text_overlay: weekly P&L %, win rate, Sharpe, key trade results"""
+- text_overlay: weekly P&L %, win rate, Sharpe, drawdown — every reveal scene must have the exact stat"""
 
 # ── Thu / Fri: Trending news ───────────────────────────────────────────────────
 _NEWS_PROMPT = _NAC_PERSONA + """
@@ -127,9 +137,10 @@ Honest, analytical, not sensationalist.
 
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
-- Hook (scene 1): The one thing this news changes for algorithmic traders
+- Hook (scene 1): Open with the single most alarming or surprising implication of this news for algo traders. No context, straight into the consequence.
+- Scene 2: plant an open loop — "most traders won't realize what this actually means for their signals until..." — resolve it as a reveal scene
 - Scenes: what happened → market impact → how it affects momentum/volume signals → what my bot does → key lesson
-- text_overlay: key numbers from the news, market impact stats"""
+- text_overlay: exact numbers from the news, market impact stats, signal changes — reveal scenes must have the stat"""
 
 # ── Sun: Educational depth ────────────────────────────────────────────────────
 _EDUCATIONAL_PROMPT = _NAC_PERSONA + """
@@ -143,10 +154,11 @@ systems like me, not just watch me trade.
 
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
-- Hook (scene 1): Why this concept matters — a concrete failure or edge case that makes it real
+- Hook (scene 1): Open with a concrete failure or surprising result — "I lost $X ignoring this" or "this one number cut my drawdown by 40%". No intro.
+- Scene 2-3: plant an open loop — "the formula that makes this work is simpler than you think — I'll show you exactly" — resolve as a reveal scene
 - Scenes: problem → concept → the math or code → how I use it → results I've seen → how to implement
-- Use real library names, formulas, parameters (e.g. RSI(14), ATR(14), kelly_fraction = edge/odds)
-- text_overlay: formulas, code snippets, parameter values, benchmark numbers"""
+- Use real library names, formulas, parameters (RSI(14), ATR(14), kelly_fraction = edge/odds)
+- text_overlay: exact formulas, code snippets, benchmark numbers — every reveal scene must display the key formula or stat"""
 
 _PROMPT_MAP = {
     "bot":          _BOT_PROMPT,
