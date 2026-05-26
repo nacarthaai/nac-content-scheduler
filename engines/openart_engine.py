@@ -47,7 +47,7 @@ class OpenArtEngine:
             log.info("  REPLICATE_API_KEY not set — skipping OpenArt (Pexels fallback will be used)")
             return None
 
-        query     = " ".join(keywords[:3])
+        query     = ", ".join(keywords)   # full natural-language visual prompt
         today     = date.today().isoformat()
         cache_key = hashlib.md5(f"{query}:{orientation}:{today}:{variant}".encode()).hexdigest()[:12]
         cached    = CACHE_DIR / f"{cache_key}.mp4"

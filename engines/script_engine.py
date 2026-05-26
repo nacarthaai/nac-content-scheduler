@@ -42,7 +42,7 @@ _RULES = """Rules:
 - short_scenes: exactly 3 scenes, narration total ~70-90 words
 - emotion: one of clarity | curiosity | confidence | focus | excitement | insight | tension
 - Mark exactly 1 long_scene and 1 short_scene as is_hero_shot: true
-- visual_keywords: 2-3 stock footage terms (trading terminal, code screen, charts, finance office, server room, data visualization)
+- visual_keywords: 3-6 words describing a vivid AI image/video scene that matches THIS scene's narration content. Write it as a natural language visual prompt — specific, cinematic, descriptive. Examples: "glowing RSI chart crossing oversold on dark terminal", "algorithmic trade executing green profit flash Bloomberg screen", "Python code scrolling on monitor in dark server room", "gold candlestick breakout pattern dramatic lighting", "risk dashboard red stop-loss triggered portfolio heatmap". Each scene must have a DIFFERENT visual — no two scenes share the same image.
 - NO filler like "in this video" or "don't forget to subscribe"
 - OUTPUT: Return ONLY valid JSON — no explanation, no markdown fences"""
 

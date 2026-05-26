@@ -236,7 +236,8 @@ def _fetch_clips(
 
         # ── Hero shot: Seedance AI video (1 per format) ──────────────────────
         if scene.get("is_hero_shot") and hero_used < 1:
-            visual = " ".join(scene.get("visual_keywords", []))
+            # visual_keywords are now full natural-language prompts — join as a phrase
+            visual = ", ".join(scene.get("visual_keywords", []))
             result = seedance_engine.generate(visual, clip_path, orientation)
             if result:
                 hero_used += 1
