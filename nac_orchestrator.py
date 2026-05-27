@@ -220,6 +220,9 @@ def main(langs: list = None, on_lang_done=None):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+_SEEDANCE_PACES = {"hook", "reveal", "cta"}
+
+
 def _fetch_clips(
     scenes: list[dict],
     run_dir: Path,
@@ -231,33 +234,30 @@ def _fetch_clips(
     clips: dict[int, Path] = {}
     clip_dir = run_dir / "clips" / label
     clip_dir.mkdir(parents=True, exist_ok=True)
-    hero_used   = 0   # max 1 Seedance hero shot per format
     orientation = "portrait" if label == "short" else "landscape"
 
     for scene in scenes:
         sid       = scene["id"]
         clip_path = clip_dir / f"scene_{sid:03d}.mp4"
+        pace      = scene.get("pace", "normal")
+        visual    = ", ".join(scene.get("visual_keywords", ["finance", "trading", "market"]))
+        narration = scene.get("narration", "")
         result    = None
 
-        # ── Hero shot: Seedance AI video (1 per format) ──────────────────────
-        if scene.get("is_hero_shot") and hero_used < 1:
-            # visual_keywords are now full natural-language prompts — join as a phrase
-            visual = ", ".join(scene.get("visual_keywords", []))
-            result = seedance_engine.generate(visual, clip_path, orientation)
+        # ── hook / reveal / cta → Seedance AI video ──────────────────────────
+        if pace in _SEEDANCE_PACES:
+            log.info(f"  Scene {sid} [{pace}] → Seedance")
+            result = seedance_engine.generate(visual, clip_path, orientation, narration=narration)
             if result:
-                hero_used += 1
                 clips[sid] = result
                 continue
-            log.warning(f"  Seedance hero shot failed for scene {sid} — falling through to OpenArt")
+            log.warning(f"  Seedance failed for scene {sid} [{pace}] — falling through to OpenArt")
 
-        # ── Regular scenes: OpenArt (FLUX image → video) → Pexels fallback ──
-        keywords = scene.get("visual_keywords", ["finance", "market", "money"])
-        variant  = f"{label}_{sid}"
-
-        result = openart_engine.fetch(keywords, orientation, variant=variant)
-
+        # ── normal → FLUX image → Pexels fallback ────────────────────────────
+        variant = f"{label}_{sid}"
+        result  = openart_engine.fetch(scene.get("visual_keywords", []), orientation, variant=variant)
         if not result:
-            result = stock_engine.fetch(keywords, orientation, variant=variant)
+            result = stock_engine.fetch(scene.get("visual_keywords", []), orientation, variant=variant)
 
         if result:
             clips[sid] = result

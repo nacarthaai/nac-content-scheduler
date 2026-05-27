@@ -30,9 +30,9 @@ class SeedanceEngine:
         self._key   = os.environ.get("REPLICATE_API_KEY", "")
         self._model = os.environ.get("SEEDANCE_MODEL", _DEFAULT_MODEL)
 
-    def generate(self, visual_description: str, out_path: Path, orientation: str = "landscape") -> Path:
+    def generate(self, visual_description: str, out_path: Path, orientation: str = "landscape", narration: str = "") -> Path:
         if not self._key:
-            log.warning("REPLICATE_API_KEY not set — skipping AI hero shot")
+            log.warning("REPLICATE_API_KEY not set — skipping Seedance")
             return None
         try:
             out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -43,7 +43,7 @@ class SeedanceEngine:
             }
             payload = {
                 "input": {
-                    "prompt":       _cinematic_prompt(visual_description),
+                    "prompt":       _cinematic_prompt(visual_description, narration),
                     "duration":     5,
                     "aspect_ratio": aspect,
                     "resolution":   "720p",
@@ -109,9 +109,12 @@ def _download(prediction: dict, out_path: Path) -> Path:
     return out_path
 
 
-def _cinematic_prompt(base: str) -> str:
+def _cinematic_prompt(visual: str, narration: str = "") -> str:
+    # Include narration context so Seedance generates visuals that match what's being said
+    context = f"Scene context: {narration[:120]}. " if narration else ""
     return (
-        f"{base}. Cinematic slow motion, 4K quality, dark luxury aesthetic, "
+        f"{context}Visual: {visual}. "
+        "Cinematic slow motion, 4K quality, dark luxury aesthetic, "
         "shallow depth of field, gold and black color palette, "
         "dramatic lighting, no text, photorealistic."
     )
