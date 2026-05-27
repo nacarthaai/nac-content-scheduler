@@ -2,6 +2,7 @@
 NacArtha Content Scheduler
 
 Runs 24/7 on Railway. Fires the video pipeline at exactly 4:00 PM EDT daily.
+Manual trigger: POST /run  (or GET /run?token=<TRIGGER_TOKEN>)
 No external cron services needed — self-contained.
 """
 import logging
@@ -10,6 +11,7 @@ import sys
 import time
 import threading
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -113,6 +115,45 @@ def _telegram(text: str):
         pass
 
 
+def _start_trigger_server():
+    """HTTP server for manual pipeline triggers. POST/GET /run to fire immediately."""
+    token = os.environ.get("TRIGGER_TOKEN", "")
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):
+            log.info(f"HTTP {fmt % args}")
+
+        def _respond(self, code, msg):
+            self.send_response(code)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(msg.encode())
+
+        def do_GET(self):
+            if not self.path.startswith("/run"):
+                return self._respond(404, "not found")
+            if token and f"token={token}" not in self.path:
+                return self._respond(403, "forbidden")
+            self._fire()
+
+        def do_POST(self):
+            if not self.path.startswith("/run"):
+                return self._respond(404, "not found")
+            if token and self.headers.get("X-Trigger-Token") != token:
+                return self._respond(403, "forbidden")
+            self._fire()
+
+        def _fire(self):
+            log.info("Manual trigger received via HTTP")
+            threading.Thread(target=_run_with_retry, daemon=True, name="ManualTrigger").start()
+            self._respond(200, "Pipeline triggered\n")
+
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), Handler)
+    log.info(f"Trigger server listening on :{port}/run")
+    threading.Thread(target=server.serve_forever, daemon=True, name="TriggerServer").start()
+
+
 scheduler = BlockingScheduler()
 
 scheduler.add_job(
@@ -121,6 +162,8 @@ scheduler.add_job(
     max_instances=1,
     misfire_grace_time=3600,
 )
+
+_start_trigger_server()
 
 now_ny = datetime.now(NY_TZ)
 log.info(f"NacArtha Scheduler running — pipeline fires daily at 4:00 PM EDT | Started at {now_ny.strftime('%H:%M')} ET")
