@@ -101,9 +101,11 @@ def main():
     log.info(f"Music: {music_path.name if music_path else 'none'}")
 
     # ── 3. Fetch video clips (shared — same visuals for all 3 channels) ─────────
+    # Short clips are mapped from long clips (center-cropped landscape→portrait by assembler).
+    # No separate portrait Seedance/FLUX calls — saves ~$0.22/day.
     log.info("Fetching video clips…")
-    clips_long  = _fetch_clips(en_script["long_scenes"],  run_dir, "long",  stock_engine, openart_engine, seedance_engine)
-    clips_short = _fetch_clips(en_script["short_scenes"], run_dir, "short", stock_engine, openart_engine, seedance_engine)
+    clips_long  = _fetch_clips(en_script["long_scenes"], run_dir, "long", stock_engine, openart_engine, seedance_engine)
+    clips_short = _map_short_clips(en_script["short_scenes"], en_script["long_scenes"], clips_long)
 
     # ── 4. Per-channel pipeline ─────────────────────────────────────────────────
     results = {}
@@ -259,6 +261,20 @@ def _fetch_clips(
         else:
             log.warning(f"  No clip for scene {sid} — will use black fallback")
 
+    return clips
+
+
+def _map_short_clips(short_scenes: list, long_scenes: list, clips_long: dict) -> dict:
+    """Map short scenes to existing long clips — short[0]→hook, short[1]→hero, short[2]→cta."""
+    long_ids = [s["id"] for s in long_scenes]
+    hero_id  = next((s["id"] for s in long_scenes if s.get("is_hero_shot")), long_ids[len(long_ids) // 2])
+    sources  = [long_ids[0], hero_id, long_ids[-1]]
+    clips    = {}
+    for i, scene in enumerate(short_scenes):
+        src_id = sources[i] if i < len(sources) else long_ids[0]
+        clip   = clips_long.get(src_id)
+        if clip:
+            clips[scene["id"]] = clip
     return clips
 
 
