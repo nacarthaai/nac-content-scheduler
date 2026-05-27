@@ -116,41 +116,57 @@ def _telegram(text: str):
 
 
 def _start_trigger_server():
-    """HTTP server for manual pipeline triggers. POST/GET /run to fire immediately."""
-    token = os.environ.get("TRIGGER_TOKEN", "")
+    """HTTP server — serves 3D dashboard at / and fires pipeline on /run."""
+    token     = os.environ.get("TRIGGER_TOKEN", "")
+    _html_tpl = (Path(__file__).parent / "static" / "dashboard.html").read_text()
+    _html     = _html_tpl.replace("%%TOKEN%%", token)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
             log.info(f"HTTP {fmt % args}")
 
-        def _respond(self, code, msg):
+        def _html_resp(self, html):
+            body = html.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _text(self, code, msg):
+            body = msg.encode()
             self.send_response(code)
             self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(msg.encode())
+            self.wfile.write(body)
 
         def do_GET(self):
-            if not self.path.startswith("/run"):
-                return self._respond(404, "not found")
-            if token and f"token={token}" not in self.path:
-                return self._respond(403, "forbidden")
-            self._fire()
+            path = self.path.split("?")[0]
+            if path in ("/", ""):
+                return self._html_resp(_html)
+            if path == "/run":
+                if token and f"token={token}" not in self.path:
+                    return self._text(403, "forbidden")
+                self._fire()
+            else:
+                self._text(404, "not found")
 
         def do_POST(self):
-            if not self.path.startswith("/run"):
-                return self._respond(404, "not found")
+            if self.path.split("?")[0] != "/run":
+                return self._text(404, "not found")
             if token and self.headers.get("X-Trigger-Token") != token:
-                return self._respond(403, "forbidden")
+                return self._text(403, "forbidden")
             self._fire()
 
         def _fire(self):
             log.info("Manual trigger received via HTTP")
             threading.Thread(target=_run_with_retry, daemon=True, name="ManualTrigger").start()
-            self._respond(200, "Pipeline triggered\n")
+            self._text(200, "Pipeline triggered\n")
 
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(("0.0.0.0", port), Handler)
-    log.info(f"Trigger server listening on :{port}/run")
+    log.info(f"Dashboard: https://nac-content-scheduler-production.up.railway.app")
     threading.Thread(target=server.serve_forever, daemon=True, name="TriggerServer").start()
 
 
