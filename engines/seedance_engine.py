@@ -1,5 +1,5 @@
 """
-SeedanceEngine — AI video clips via Seedance 1.0 (ByteDance) on Replicate.
+SeedanceEngine — AI video clips via Seedance 1 Lite (ByteDance) on Replicate.
 
 Direct drop-in replacement for RunwayEngine.
 Same interface: generate(visual_description, out_path, orientation) → Path | None
@@ -8,8 +8,8 @@ Cost: ~$0.05–0.10/clip.  Budget cap: 1 hero shot per format = 2 clips/day.
 
 Env vars:
   REPLICATE_API_KEY  — required
-  SEEDANCE_MODEL     — optional override (default: bytedance/seedance-1-0-lite)
-                        set to bytedance/seedance-1-0-pro for higher quality
+  SEEDANCE_MODEL     — optional override (default: bytedance/seedance-1-lite)
+                        set to bytedance/seedance-2.0 for higher quality
 """
 import logging
 import os
@@ -21,7 +21,7 @@ import requests
 log = logging.getLogger("seedance_engine")
 
 REPLICATE_API  = "https://api.replicate.com/v1"
-_DEFAULT_MODEL = "bytedance/seedance-1-0-lite"
+_DEFAULT_MODEL = "bytedance/seedance-1-lite"
 
 
 class SeedanceEngine:
