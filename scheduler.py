@@ -3,7 +3,11 @@ NacArtha Content Scheduler
 
 Runs 24/7 on Railway. Fires the video pipeline at exactly 4:00 PM EDT daily.
 Manual trigger: POST /run  (or GET /run?token=<TRIGGER_TOKEN>)
-No external cron services needed — self-contained.
+
+Resilience:
+  - Per-language completion markers in output/.done_LANG_YYYY-MM-DD
+  - On startup, auto-resumes any languages not yet done today (handles redeploy mid-run)
+  - /run returns 409 if pipeline is already running (prevents double-trigger)
 """
 import logging
 import os
@@ -27,55 +31,42 @@ logging.basicConfig(
 )
 log = logging.getLogger("scheduler")
 
-NY_TZ = ZoneInfo("America/New_York")
+NY_TZ      = ZoneInfo("America/New_York")
+_OUTPUT    = Path(__file__).parent / "output"
+_ALL_LANGS = ["en", "hi", "te"]
 
-# Tracks today's successful run. Written to output/ which persists within a
-# Railway deployment. Wiped on redeploy — but redeploys after 4pm are rare and
-# a duplicate upload is harmless compared to missing a day entirely.
-_LAST_RUN_FILE = Path(__file__).parent / "output" / ".last_run_date"
-
-# Secondary check: scan output/ for a run_summary.json from today, which
-# means the pipeline finished (even if _LAST_RUN_FILE was lost).
-_OUTPUT_DIR = Path(__file__).parent / "output"
+_pipeline_lock = threading.Lock()   # prevents concurrent runs
 
 
-def _already_ran_today() -> bool:
-    today = datetime.now(NY_TZ).strftime("%Y-%m-%d")
+def _today() -> str:
+    return datetime.now(NY_TZ).strftime("%Y-%m-%d")
+
+
+def _done_file(lang: str) -> Path:
+    return _OUTPUT / f".done_{lang}_{_today()}"
+
+
+def _pending_langs() -> list:
+    """Return languages that haven't completed successfully today."""
+    return [l for l in _ALL_LANGS if not _done_file(l).exists()]
+
+
+def _mark_lang_done(lang: str):
     try:
-        if _LAST_RUN_FILE.exists() and _LAST_RUN_FILE.read_text().strip() == today:
-            return True
-    except Exception:
-        pass
-    # Fallback: check for a today-dated run directory in output/
-    try:
-        prefix = f"nac_{today.replace('-', '')}"
-        for d in _OUTPUT_DIR.iterdir():
-            if d.is_dir() and d.name.startswith(prefix):
-                summary = d / "run_summary.json"
-                if summary.exists():
-                    return True
-    except Exception:
-        pass
-    return False
-
-
-def _mark_ran_today():
-    try:
-        _LAST_RUN_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _LAST_RUN_FILE.write_text(datetime.now(NY_TZ).strftime("%Y-%m-%d"))
+        _OUTPUT.mkdir(parents=True, exist_ok=True)
+        _done_file(lang).touch()
     except Exception:
         pass
 
 
-def run_pipeline(is_retry: bool = False):
+def run_pipeline(langs: list, is_retry: bool = False) -> bool:
     label = "RETRY" if is_retry else "PIPELINE"
-    log.info(f"=== Firing NacArtha {label} ===")
+    log.info(f"=== Firing NacArtha {label} langs={langs} ===")
     try:
         import sys as _sys
-        _sys.modules.pop("nac_orchestrator", None)  # fresh import each run
+        _sys.modules.pop("nac_orchestrator", None)
         import nac_orchestrator
-        nac_orchestrator.main()
-        _mark_ran_today()
+        nac_orchestrator.main(langs=langs, on_lang_done=_mark_lang_done)
         log.info(f"=== {label} complete ===")
         return True
     except Exception as e:
@@ -84,19 +75,44 @@ def run_pipeline(is_retry: bool = False):
         return False
 
 
-def _run_with_retry():
-    """Run pipeline; if it fails, retry once after 30 minutes."""
-    success = run_pipeline(is_retry=False)
-    if not success:
-        log.info("Pipeline failed — scheduling retry in 30 minutes")
-        _telegram("⏳ NacArtha pipeline will retry in 30 minutes")
+def _run_with_retry(langs: list = None):
+    """Run pipeline for pending langs; retry once after 30 min on failure."""
+    if langs is None:
+        langs = _pending_langs()
 
-        def _retry():
-            time.sleep(30 * 60)
-            if not _already_ran_today():
-                run_pipeline(is_retry=True)
+    if not langs:
+        log.info("All languages already done today — skipping")
+        return
 
-        threading.Thread(target=_retry, daemon=True, name="PipelineRetry").start()
+    if not _pipeline_lock.acquire(blocking=False):
+        log.warning("Pipeline already running — skipping duplicate trigger")
+        return
+
+    try:
+        success = run_pipeline(langs, is_retry=False)
+        if not success:
+            log.info("Pipeline failed — scheduling retry in 30 minutes")
+            _telegram("⏳ NacArtha pipeline will retry in 30 minutes")
+
+            def _retry():
+                time.sleep(30 * 60)
+                pending = _pending_langs()
+                if pending:
+                    run_pipeline(pending, is_retry=True)
+
+            threading.Thread(target=_retry, daemon=True, name="PipelineRetry").start()
+    finally:
+        _pipeline_lock.release()
+
+
+def _startup_resume():
+    """After a short warmup, auto-resume if today has incomplete languages."""
+    time.sleep(60)
+    pending = _pending_langs()
+    if pending:
+        log.info(f"Startup resume — incomplete langs today: {pending}")
+        _telegram(f"🔄 NacArtha resuming incomplete langs: {pending}")
+        _run_with_retry(langs=pending)
 
 
 def _telegram(text: str):
@@ -160,6 +176,8 @@ def _start_trigger_server():
             self._fire()
 
         def _fire(self):
+            if _pipeline_lock.locked():
+                return self._text(409, "Pipeline already running\n")
             log.info("Manual trigger received via HTTP")
             threading.Thread(target=_run_with_retry, daemon=True, name="ManualTrigger").start()
             self._text(200, "Pipeline triggered\n")
@@ -181,6 +199,9 @@ scheduler.add_job(
 
 _start_trigger_server()
 
+# Auto-resume any incomplete languages from a previous interrupted run
+threading.Thread(target=_startup_resume, daemon=True, name="StartupResume").start()
+
 now_ny = datetime.now(NY_TZ)
 log.info(f"NacArtha Scheduler running — pipeline fires daily at 4:00 PM EDT | Started at {now_ny.strftime('%H:%M')} ET")
 
@@ -188,4 +209,3 @@ try:
     scheduler.start()
 except (KeyboardInterrupt, SystemExit):
     log.info("Scheduler stopped")
-

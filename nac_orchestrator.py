@@ -42,7 +42,7 @@ log = logging.getLogger("nac_orchestrator")
 OUTPUT_DIR = Path(__file__).parent / "output"
 
 
-def main():
+def main(langs: list = None, on_lang_done=None):
     try:
         import static_ffmpeg
         static_ffmpeg.add_paths()
@@ -55,7 +55,8 @@ def main():
     parser.add_argument("--lang", default="all", help="en | hi | te | all")
     args = parser.parse_args()
 
-    langs = ["en", "hi", "te"] if args.lang == "all" else [args.lang]
+    if langs is None:
+        langs = ["en", "hi", "te"] if args.lang == "all" else [args.lang]
     run_id = datetime.now().strftime("nac_%Y%m%d_%H%M%S")
     run_dir = OUTPUT_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -197,6 +198,8 @@ def main():
                 "long_url":  long_urls.get(lang),
                 "short_url": short_urls.get(lang),
             }
+            if on_lang_done:
+                on_lang_done(lang)
             log.info(f"  [{lang}] Done. Long: {results[lang]['long_url']} | Short: {results[lang]['short_url']}")
 
         except Exception as ch_err:
