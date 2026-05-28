@@ -106,8 +106,13 @@ def _run_with_retry(langs: list = None):
 
 
 def _startup_resume():
-    """After a short warmup, auto-resume if today has incomplete languages."""
+    """Resume incomplete languages — but ONLY if it's already past 4 PM EDT today.
+    If we deploy before 4 PM, the cron handles it. Only resume after the cron window."""
     time.sleep(60)
+    now = datetime.now(NY_TZ)
+    if now.hour < 16:
+        log.info(f"Startup resume skipped — only {now.hour}:{now.minute:02d} ET, cron fires at 16:00")
+        return
     pending = _pending_langs()
     if pending:
         log.info(f"Startup resume — incomplete langs today: {pending}")
