@@ -49,6 +49,8 @@ _RULES = """Rules:
   * normal → everything else
 - Open loops: in scenes 2-4, plant a question or tease ("I'll show you the exact number in a moment — but you won't expect it"). Answer it in a later reveal scene. This is the #1 retention tool.
 - Sentence rhythm: mix 4-word punches with longer sentences. Never 3 sentences the same length in a row.
+- HOOK FIRST WORD RULE: Scene 1 narration MUST start with a number, dollar amount, or action word. FORBIDDEN first words: "Today", "So", "Welcome", "In this", "I'm", "Hey", "Let me". REQUIRED: "$55", "Three trades", "CRASHED", "Zero.", "47%", "I lost"
+- short_scenes scene 1: first word must be a number or shocking statement. Viewer decides in 1 second.
 - Mark exactly 1 long_scene and 1 short_scene as is_hero_shot: true
 - visual_keywords: one vivid natural-language prompt describing the AI image/video for THIS scene — specific, cinematic, matches the narration. Examples: "glowing RSI oscillator crossing oversold threshold dark Bloomberg terminal", "Python momentum signal triggering buy order green flash on screen", "gold candlestick breakout pattern dramatic cinematic lighting close-up". Every scene must have a DIFFERENT visual.
 - short_scenes: scene 1 must open IMMEDIATELY — no warmup. Shorts viewers decide in 2 seconds.

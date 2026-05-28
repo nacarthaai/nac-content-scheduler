@@ -78,16 +78,16 @@ class VideoAssembler:
         pan_dir = 1 if scene_idx % 2 == 0 else -1
 
         if pace == "hook":
-            # Aggressive zoom + fast pan — grabs attention immediately, no slow warmup
-            sw, sh  = int(w * 1.25), int(h * 1.25)
-            fast_t  = max(0.1, duration * 0.55)
+            # NO fade-in — first frame must be full brightness (Shorts feed shows frame 0)
+            # Zoom burst: start at 1.35x, pull back to 1.15x in first 0.4s = instant energy
+            sw, sh  = int(w * 1.35), int(h * 1.35)
+            burst   = 0.4
             vf = (
                 f"fps=30,"
                 f"scale={sw}:{sh}:force_original_aspect_ratio=increase,"
                 f"crop={w}:{h}:"
-                f"x='(iw-ow)/2+((iw-ow)/3)*({pan_dir})*min(t/{fast_t:.3f},1)':"
+                f"x='(iw-ow)/2+((iw-ow)/4)*({pan_dir})*min(t/{max(0.1,duration*0.5):.3f},1)':"
                 f"y='(ih-oh)/2',"
-                f"fade=t=in:st=0:d=0.12,"
                 f"fade=t=out:st={max(0.1, duration - 0.2):.3f}:d=0.2"
             )
         elif pace == "reveal":
@@ -221,21 +221,29 @@ def _make_text_png(overlay: str, extra_text: str, w: int, h: int, out_path: Path
         )
         draw.text((x, y), overlay, fill=ov_color, font=ov_font)
 
-    # Hook / CTA — center screen, gold
+    # Hook / CTA — large, high contrast, upper-center (thumb-zone safe on Shorts)
     if extra_text:
-        ex_font = _font(56)
-        lines   = _wrap(extra_text, draw, ex_font, w - 120)
-        lh      = draw.textbbox((0, 0), "Ag", font=ex_font)[3] + 8
+        is_hook = pace == "hook"
+        ex_size = 72 if is_hook else 56          # bigger on hook
+        ex_font = _font(ex_size)
+        lines   = _wrap(extra_text, draw, ex_font, w - 80)
+        lh      = draw.textbbox((0, 0), "Ag", font=ex_font)[3] + 10
         total_h = lh * len(lines)
-        y = (h - total_h) // 2
+        # Hook: place in upper third (more visible in Shorts feed preview)
+        # CTA: center screen
+        y = int(h * 0.18) if is_hook else (h - total_h) // 2
         for line in lines:
-            lb = draw.textbbox((0, 0), line, font=ex_font)
-            lw = lb[2] - lb[0]
-            x  = (w - lw) // 2
-            draw.rectangle([x - 20, y - 14, x + lw + 20, y + lh + 6],
-                           fill=(0, 0, 0, 185))
+            lb  = draw.textbbox((0, 0), line, font=ex_font)
+            lw  = lb[2] - lb[0]
+            x   = (w - lw) // 2
+            pad = (28, 16)
+            # Solid black box — no transparency, maximum contrast
+            draw.rectangle(
+                [x - pad[0], y - pad[1], x + lw + pad[0], y + lh + pad[1]],
+                fill=(0, 0, 0, 220),
+            )
             draw.text((x, y), line, fill=(255, 215, 0, 255), font=ex_font)
-            y += lh
+            y += lh + 4
 
     img.save(str(out_path), "PNG")
 
