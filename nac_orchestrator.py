@@ -5,9 +5,11 @@ NacArtha Cinematic Pipeline
 → Translated to Hindi + Telugu (same visuals, different ElevenLabs audio)
 → Uploaded to 3 separate YouTube channels
 
-Hero shots:      Seedance 1.0 on Replicate (1 per format = 2 clips/day)
-Scene footage:   OpenArtEngine — FLUX image → Ken Burns video (Replicate)
-                 Falls back to StockEngine (Pexels) if REPLICATE_API_KEY unset or FLUX fails
+AI video (hook/reveal/cta scenes):
+  VideoGenRouter rotates: Kling (66/mo free) → Hailuo (30/mo free) → Seedance paid (Replicate)
+Scene footage (normal scenes):
+  OpenArtEngine — FLUX image → Ken Burns video (Replicate)
+  Falls back to StockEngine (Pexels) if REPLICATE_API_KEY unset or FLUX fails
 Voices:          ElevenLabs multilingual_v2 → Edge TTS fallback
 """
 import argparse
@@ -26,7 +28,7 @@ from engines.topic_selector import TopicSelector
 from engines.voice_engine import VoiceEngine
 from engines.stock_engine import StockEngine
 from engines.openart_engine import OpenArtEngine
-from engines.seedance_engine import SeedanceEngine
+from engines.videogen_router import VideoGenRouter
 from engines.video_assembler import VideoAssembler
 from engines.thumbnail_engine import ThumbnailEngine
 from engines.music_engine import MusicEngine
@@ -66,9 +68,9 @@ def main(langs: list = None, on_lang_done=None):
     topic_selector   = TopicSelector()
     script_engine    = ScriptEngine()
     voice_engine     = VoiceEngine()
-    stock_engine     = StockEngine()      # free Pexels fallback
-    openart_engine   = OpenArtEngine()    # primary: FLUX image → video (Replicate)
-    seedance_engine  = SeedanceEngine()   # hero shots: AI video (Replicate)
+    stock_engine     = StockEngine()      # Pexels fallback
+    openart_engine   = OpenArtEngine()    # FLUX image → Ken Burns video (Replicate)
+    videogen_router  = VideoGenRouter()   # AI video: Kling → Hailuo → Seedance paid
     assembler        = VideoAssembler()
     thumbnail_engine = ThumbnailEngine()
     music_engine     = MusicEngine()
@@ -105,7 +107,7 @@ def main(langs: list = None, on_lang_done=None):
     # Short clips are mapped from long clips (center-cropped landscape→portrait by assembler).
     # No separate portrait Seedance/FLUX calls — saves ~$0.22/day.
     log.info("Fetching video clips…")
-    clips_long  = _fetch_clips(en_script["long_scenes"], run_dir, "long", stock_engine, openart_engine, seedance_engine)
+    clips_long  = _fetch_clips(en_script["long_scenes"], run_dir, "long", stock_engine, openart_engine, videogen_router)
     clips_short = _map_short_clips(en_script["short_scenes"], en_script["long_scenes"], clips_long)
 
     # ── 4. Per-channel pipeline ─────────────────────────────────────────────────
@@ -220,7 +222,7 @@ def main(langs: list = None, on_lang_done=None):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-_SEEDANCE_PACES = {"hook", "reveal", "cta"}
+_AI_VIDEO_PACES = {"hook", "reveal", "cta"}
 
 
 def _fetch_clips(
@@ -229,7 +231,7 @@ def _fetch_clips(
     label: str,
     stock_engine: StockEngine,
     openart_engine: OpenArtEngine,
-    seedance_engine: SeedanceEngine,
+    videogen_router: VideoGenRouter,
 ) -> dict:
     clips: dict[int, Path] = {}
     clip_dir = run_dir / "clips" / label
@@ -244,14 +246,14 @@ def _fetch_clips(
         narration = scene.get("narration", "")
         result    = None
 
-        # ── hook / reveal / cta → Seedance AI video ──────────────────────────
-        if pace in _SEEDANCE_PACES:
-            log.info(f"  Scene {sid} [{pace}] → Seedance")
-            result = seedance_engine.generate(visual, clip_path, orientation, narration=narration)
+        # ── hook / reveal / cta → AI video (Kling → Hailuo → Seedance paid) ───
+        if pace in _AI_VIDEO_PACES:
+            log.info(f"  Scene {sid} [{pace}] → VideoGenRouter")
+            result = videogen_router.generate(visual, clip_path, orientation, narration=narration)
             if result:
                 clips[sid] = result
                 continue
-            log.warning(f"  Seedance failed for scene {sid} [{pace}] — falling through to OpenArt")
+            log.warning(f"  VideoGenRouter failed for scene {sid} [{pace}] — falling through to OpenArt")
 
         # ── normal → FLUX image → Pexels fallback ────────────────────────────
         variant = f"{label}_{sid}"
