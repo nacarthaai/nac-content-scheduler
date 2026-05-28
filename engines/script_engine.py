@@ -40,40 +40,104 @@ _JSON_SCHEMA = """
 
 # ── NacArtha character lock — injected into every visual_prompt ───────────────
 _CHARACTER_LOCK = """
-NACARTHA CHARACTER (STRICT IDENTITY LOCK — use in every scene featuring him):
-Indian male, 28-35. Black leather jacket over dark shirt. Short dark wavy hair,
-medium-dark complexion, sharp jawline, clean-shaven. Calm, focused, intelligent
-expression. Slim athletic build. NEVER changes appearance between scenes.
-Background: dark luxury trading office, multiple Bloomberg terminals glowing
-electric blue and white, dim gold accent lighting. Cinematic dramatic lighting.
+NACARTHA CHARACTER (STRICT IDENTITY LOCK — NEVER change across scenes):
+Indian male, 28-32. Sharp black blazer, crisp white shirt, gold tie pin.
+Dark well-groomed hair, sharp jawline, clean-shaven, calm confident expression.
+Background: ultra-modern dark luxury trading office. Bloomberg terminals glow
+gold and electric blue behind him. Cinematic dramatic lighting throughout.
+
+STUDENT CHARACTER (educational episodes only):
+Indian male, 19-20. Casual hoodie, notebook open, curious expression.
+Used only in educational scenes where NacArtha teaches a concept.
 """
+
+# ── Intro + Outro templates (locked across all episode types) ─────────────────
+_INTRO_NARRATION = (
+    "Hey. NacArtha here. Welcome to my trading world."
+)
+_OUTRO_NARRATION = (
+    "Subscribe to NacArtha. I trade every day — you should know what I know. "
+    "Follow the algorithm. See you tomorrow."
+)
+_SHORT_INTRO_NARRATION = "Hey. NacArtha. Here's what happened today."
+_SHORT_OUTRO_NARRATION  = "Subscribe to NacArtha. Daily trades, live. Don't miss tomorrow."
 
 _RULES = """Rules:
 - long_scenes: exactly 10 scenes, narration total ~290-320 words
 - short_scenes: exactly 3 scenes, narration total ~70-90 words
 - emotion: one of clarity | curiosity | confidence | focus | excitement | insight | tension
-- pace: one of hook | normal | reveal | cta — this controls visual speed and transition style
-  * hook  → scene 1 ALWAYS. Open mid-action: shocking stat, bold claim, or provocative question. NO intro, NO "today we cover". First sentence must stop a scrolling thumb.
-  * reveal → scenes where you drop a key number, answer an open loop, or land a surprising fact. Use 2-4× per long video, 1× per short.
-  * cta   → last scene ALWAYS. Direct and urgent.
-  * normal → everything else
-- Open loops: in scenes 2-4, plant a question or tease ("I'll show you the exact number in a moment — but you won't expect it"). Answer it in a later reveal scene. This is the #1 retention tool.
-- Sentence rhythm: mix 4-word punches with longer sentences. Never 3 sentences the same length in a row.
-- HOOK FIRST WORD RULE: Scene 1 narration MUST start with a number, dollar amount, or action word. FORBIDDEN first words: "Today", "So", "Welcome", "In this", "I'm", "Hey", "Let me". REQUIRED: "$55", "Three trades", "CRASHED", "Zero.", "47%", "I lost"
-- short_scenes scene 1: first word must be a number or shocking statement. Viewer decides in 1 second.
-- Mark exactly 1 long_scene and 1 short_scene as is_hero_shot: true
+- pace: one of hook | normal | reveal | cta
 
-VISUAL_PROMPT RULES — write each as a full cinematic AI video generation prompt:
+PACE RULES:
+  * hook   → scene 1 ALWAYS. Branded intro + immediate hook content (see INTRO RULE).
+  * reveal → drop a key number, answer an open loop, or land a surprising fact.
+             Use 2-4× per long video, 1× per short.
+  * cta    → last scene ALWAYS. Branded subscribe outro (see OUTRO RULE).
+  * normal → everything else.
+
+INTRO RULE (scene 1, pace: hook) — MANDATORY for every episode type:
+  Long video narration MUST start with: "Hey. NacArtha here. Welcome to my trading world."
+  Then immediately deliver the hook: the single most shocking stat, decision, or tension point.
+  No separate "today we cover" sentence. Hook content follows the intro phrase in the same breath.
+  Example: "Hey. NacArtha here. Welcome to my trading world. Three trades. One loss. And I did it on purpose."
+
+  Short video narration: start with "Hey. NacArtha." then the hook stat in the same sentence.
+  Example: "Hey. NacArtha. The algorithm just lost $55 — and I'm not fixing it."
+
+OUTRO RULE (last scene, pace: cta) — MANDATORY for every episode type:
+  Long video narration MUST end with exactly this CTA (word-for-word):
+    "Subscribe to NacArtha. I trade every day — you should know what I know. Follow the algorithm. See you tomorrow."
+  Short video: "Subscribe to NacArtha. Daily trades, live. Don't miss tomorrow."
+  No other subscribe/follow text anywhere else in the script.
+
+OPEN LOOPS: in scenes 2-4, plant a question or tease.
+  Example: "I'll show you the exact number in a moment — but you won't expect it."
+  Answer it as a reveal scene mid-video. This is the #1 retention tool.
+
+SENTENCE RHYTHM: mix 4-word punches with longer sentences. Never 3 same-length in a row.
+Mark exactly 1 long_scene and 1 short_scene as is_hero_shot: true.
+
+VISUAL_PROMPT RULES — write each as a full cinematic AI video prompt with precise timing:
 """ + _CHARACTER_LOCK + """
-- Format: SETTING + CHARACTER ACTION (with timing 0-2s, 2-5s etc) + CAMERA + LIGHTING + AUDIO
-- Hook scene: NacArtha turns to camera. "0-2s: Back to camera, slow turn, direct eye contact. 2-4s: Arms open wide, terminals glow behind. Camera: slow push-in. Lighting: gold dramatic backlight. Audio: terminal hum."
-- Reveal scene: extreme close-up on stat/screen. "0-2s: ECU on Bloomberg terminal, red P&L -$55. Cursor blinks. 2-4s: Slow pull-back reveals NacArtha's face, expressionless. Micro slow-motion 0.2s on the number. Audio: single keystroke, silence."
-- Normal scene: NacArtha at work. "0-5s: NacArtha at standing desk, scrolling terminal. Points to RSI line crossing threshold. Camera: medium shot, slight handheld. Lighting: cool blue terminal glow, warm accent. Audio: keyboard clicks."
-- CTA scene: direct to lens. "0-5s: NacArtha faces camera, leans forward slightly. Confident, direct. Terminal array behind. Text appears: follow for tomorrow. Camera: locked-off medium close-up."
-- Every scene must have a DIFFERENT visual — no repeated settings or actions
-- Do NOT include narration text in visual_prompt — only describe what is SEEN
-- short_scenes: scene 1 must start mid-action, no warmup
-- NO filler: no "in this video", "don't forget to subscribe", "stay tuned"
+Format: "0-2s: [action]. 2-5s: [action]. Camera: [type]. Lighting: [description]. Audio: [sound]."
+
+INTRO / HOOK scene visual:
+  "0-2s: NacArtha stands center frame, back to camera. Slow turn toward lens. Direct eye contact.
+  Slight confident smirk. 2-4s: Arms open wide. Bloomberg terminals glow brighter behind him.
+  Gold light sweeps left to right. 4-7s: Reaches for sleek matte-black laptop on glass desk.
+  Opens it. NacArtha logo pulses gold on screen. Reflection in his eyes.
+  7-10s: Camera slow push-in toward laptop screen. Logo dissolves into live trading dashboard.
+  Green and red candles flicker. Camera: slow push-in throughout. Lighting: gold dramatic backlight.
+  Audio: keyboard click, terminal hum."
+
+REVEAL scene visual:
+  "0-2s: Extreme close-up. Bloomberg terminal. Red P&L figure. Cursor blinks.
+  2-4s: Cut to NacArtha's face. Expressionless. Eyes scanning screen.
+  4-5s: Slow zoom out. His hand points at RSI line crossing threshold.
+  Micro slow-motion 0.3s at crossover point.
+  Camera: ECU to medium. Lighting: cool blue terminal glow. Audio: single keystroke, silence."
+
+NORMAL scene visual:
+  "0-5s: NacArtha at standing desk, scrolling terminal. Points to RSI line.
+  Camera: medium shot, slight handheld. Lighting: cool blue terminal glow, warm accent.
+  Audio: keyboard clicks, ambient hum."
+
+EDUCATIONAL scene with student:
+  "0-3s: Student leans forward across desk, notebook open, curious. Asks question.
+  3-5s: NacArtha walks to glass whiteboard, marker in hand. Writes key formula.
+  Turns to camera with calm authority. 5-10s: Whiteboard animates — RSI chart appears.
+  NacArtha traces signal line with marker. Student watches, nods.
+  Camera: wide to medium close. Lighting: warm office. Audio: marker on glass, ambient."
+
+CTA scene visual:
+  "0-5s: NacArtha faces camera directly. Leans forward slightly. Confident, unhurried.
+  Bloomberg terminal array glows behind him. Subscribe text appears on-screen.
+  Camera: locked-off medium close-up. Lighting: gold accent. Audio: terminal hum fades to silence."
+
+- Every scene must show a DIFFERENT setting or action — no repeated visuals
+- Do NOT include narration text in visual_prompt — describe only what is SEEN
+- short_scenes scene 1: starts with the intro + hook in one fluid motion, no warmup
+- NO filler: no 'in this video', 'don't forget to like', 'stay tuned'
 - OUTPUT: Return ONLY valid JSON — no explanation, no markdown fences"""
 
 # ── Shared persona injected into every prompt ─────────────────────────────────
@@ -97,14 +161,17 @@ Create a YouTube video script for this NacArtha bot update: "{title}"
 This is a BRAND UPDATE episode — transparent, honest, performance-focused.
 Share what actually happened, what the algorithm decided, and WHY.
 Include specific numbers, signal values, or trade details wherever possible.
-This builds trust with viewers who are following the bot's journey.
 
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
-- Hook (scene 1): Lead with the single most interesting thing — a specific number, a decision, a moment of tension. No intro.
-- Plant an open loop in scene 2-3, resolve it as a reveal scene mid-video
-- Scenes: what happened → signals involved → what I did or didn't do → risk management → key takeaway
-- text_overlay: P&L %, signal values, trade counts, key rules — every reveal scene must have a stat overlay"""
+Episode-specific guidance:
+- Scene 1 (hook): MUST open with the INTRO RULE phrase, then pivot to the single most
+  interesting thing — a specific number, a decision, a moment of tension.
+  Example: "Hey. NacArtha here. Welcome to my trading world. Three trades fired. One I blocked myself."
+- Scene 2-3: plant an open loop, resolve as a reveal scene mid-video
+- Flow: what happened → signals involved → what I did or didn't do → risk management → key takeaway
+- Last scene (cta): MUST use the OUTRO RULE phrase word-for-word
+- text_overlay: P&L %, signal values, trade counts — every reveal scene must have a stat overlay"""
 
 # ── Tue: Daily recap (live Alpaca data injected) ──────────────────────────────
 _DAILY_RECAP_PROMPT = _NAC_PERSONA + """
@@ -119,9 +186,13 @@ What did risk management block? What does today's result mean for the strategy?
 
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
-- Hook (scene 1): Start with today's bottom line number — P&L, trades fired, or the one moment that defined the day. No warmup.
-- Scene 2-3: plant an open loop about WHY something happened — resolve it as a reveal scene after the midpoint
-- Scenes: market open → signals scanned → trades taken → risk moments → close → lesson
+Episode-specific guidance:
+- Scene 1 (hook): MUST open with the INTRO RULE phrase, then the bottom line number —
+  today's P&L, trades fired, or the defining moment.
+  Example: "Hey. NacArtha here. Welcome to my trading world. $87 gained. Four signals ignored."
+- Scene 2-3: plant an open loop about WHY something happened — resolve as a reveal scene after midpoint
+- Flow: market open → signals scanned → trades taken → risk moments → close → lesson
+- Last scene (cta): MUST use the OUTRO RULE phrase word-for-word
 - Use real symbols and numbers; every reveal scene must show the exact figure as text_overlay"""
 
 # ── Sat: Weekly recap ─────────────────────────────────────────────────────────
@@ -137,9 +208,12 @@ Be transparent — viewers are following this journey and they deserve honest nu
 
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
-- Hook (scene 1): Open with the week's single most dramatic number — best trade, worst day, net P&L. No intro.
-- Plant an open loop about the worst moment in scene 2 — reveal exactly what happened (and why) as a reveal scene
-- Scenes: week overview → best day → worst day → risk management moments → what I learned → next week
+Episode-specific guidance:
+- Scene 1 (hook): MUST open with the INTRO RULE phrase, then the week's single most dramatic number.
+  Example: "Hey. NacArtha here. Welcome to my trading world. Five days. One disaster. Here's the full picture."
+- Scene 2: plant an open loop about the worst moment — reveal exactly what happened as a reveal scene
+- Flow: week overview → best day → worst day → risk moments → what I learned → next week preview
+- Last scene (cta): MUST use the OUTRO RULE phrase word-for-word
 - text_overlay: weekly P&L %, win rate, Sharpe, drawdown — every reveal scene must have the exact stat"""
 
 # ── Thu / Fri: Trending news ───────────────────────────────────────────────────
@@ -158,10 +232,14 @@ Honest, analytical, not sensationalist.
 
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
-- Hook (scene 1): Open with the single most alarming or surprising implication of this news for algo traders. No context, straight into the consequence.
-- Scene 2: plant an open loop — "most traders won't realize what this actually means for their signals until..." — resolve it as a reveal scene
-- Scenes: what happened → market impact → how it affects momentum/volume signals → what my bot does → key lesson
-- text_overlay: exact numbers from the news, market impact stats, signal changes — reveal scenes must have the stat"""
+Episode-specific guidance:
+- Scene 1 (hook): MUST open with the INTRO RULE phrase, then the single most alarming
+  implication of this news for algo traders.
+  Example: "Hey. NacArtha here. Welcome to my trading world. The Fed just broke the momentum signal I use every day."
+- Scene 2: plant an open loop — "most traders won't see what this actually does to their signals until..." — resolve as reveal
+- Flow: what happened → market impact → how it affects momentum/volume signals → what my bot does → key lesson
+- Last scene (cta): MUST use the OUTRO RULE phrase word-for-word
+- text_overlay: exact numbers from the news, market impact stats — reveal scenes must have the stat"""
 
 # ── Sun: Educational depth ────────────────────────────────────────────────────
 _EDUCATIONAL_PROMPT = _NAC_PERSONA + """
@@ -173,12 +251,20 @@ Explain the concept clearly, show how it works mathematically or in code, and th
 exactly how I use it inside NacArtha. Be specific — this is for viewers who want to build
 systems like me, not just watch me trade.
 
+You may use the STUDENT CHARACTER (Indian male 19-20, casual hoodie, curious) in 1-2 scenes
+where NacArtha explains a concept at a whiteboard or glass display — this creates a
+teacher/student dynamic that improves viewer engagement and retention.
+
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
-- Hook (scene 1): Open with a concrete failure or surprising result — "I lost $X ignoring this" or "this one number cut my drawdown by 40%". No intro.
-- Scene 2-3: plant an open loop — "the formula that makes this work is simpler than you think — I'll show you exactly" — resolve as a reveal scene
-- Scenes: problem → concept → the math or code → how I use it → results I've seen → how to implement
+Episode-specific guidance:
+- Scene 1 (hook): MUST open with the INTRO RULE phrase, then a concrete failure or surprising result.
+  Example: "Hey. NacArtha here. Welcome to my trading world. I lost $340 ignoring this one number."
+- Scene 2-3: plant an open loop — "the formula that makes this work is simpler than you think — I'll show you exactly" — resolve as reveal
+- Flow: problem → concept → the math or code → how I use it → results I've seen → how to implement
 - Use real library names, formulas, parameters (RSI(14), ATR(14), kelly_fraction = edge/odds)
+- Student scenes: use the EDUCATIONAL scene visual format from VISUAL_PROMPT RULES
+- Last scene (cta): MUST use the OUTRO RULE phrase word-for-word
 - text_overlay: exact formulas, code snippets, benchmark numbers — every reveal scene must display the key formula or stat"""
 
 _PROMPT_MAP = {
