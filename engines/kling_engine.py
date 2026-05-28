@@ -25,6 +25,16 @@ log = logging.getLogger("kling_engine")
 
 _API_BASE    = "https://api.klingai.com"
 _DEFAULT_MDL = "kling-v1"
+_CHAR_REF    = Path(__file__).parent.parent / "assets" / "nac_character_ref.png"
+
+
+def _encode_ref_image() -> str | None:
+    if not _CHAR_REF.exists():
+        return None
+    try:
+        return base64.b64encode(_CHAR_REF.read_bytes()).decode()
+    except Exception:
+        return None
 
 
 def _jwt(access_key: str, secret_key: str) -> str:
@@ -43,9 +53,10 @@ def _jwt(access_key: str, secret_key: str) -> str:
 class KlingEngine:
 
     def __init__(self):
-        self._access = os.environ.get("KLING_ACCESS_KEY", "")
-        self._secret = os.environ.get("KLING_SECRET_KEY", "")
-        self._model  = os.environ.get("KLING_MODEL", _DEFAULT_MDL)
+        self._access   = os.environ.get("KLING_ACCESS_KEY", "")
+        self._secret   = os.environ.get("KLING_SECRET_KEY", "")
+        self._model    = os.environ.get("KLING_MODEL", _DEFAULT_MDL)
+        self._char_ref = _encode_ref_image()
 
     def generate(self, visual_description: str, out_path: Path, orientation: str = "landscape", narration: str = "") -> Path:
         if not self._access or not self._secret:
@@ -59,18 +70,32 @@ class KlingEngine:
                 "Authorization": f"Bearer {token}",
                 "Content-Type":  "application/json",
             }
-            payload = {
-                "model":       self._model,
-                "prompt":      _cinematic_prompt(visual_description, narration),
-                "duration":    "5",
-                "aspect_ratio": aspect,
-                "cfg_scale":   0.5,
-                "mode":        "std",
-            }
-            r = requests.post(
-                f"{_API_BASE}/v1/videos/text2video",
-                headers=headers, json=payload, timeout=60,
-            )
+
+            # Use image-to-video to lock NAC's character reference as first frame
+            if self._char_ref:
+                payload = {
+                    "model":         self._model,
+                    "prompt":        _cinematic_prompt(visual_description, narration),
+                    "duration":      "5",
+                    "aspect_ratio":  aspect,
+                    "cfg_scale":     0.5,
+                    "mode":          "std",
+                    "image":         f"data:image/png;base64,{self._char_ref}",
+                    "image_tail":    None,
+                }
+                endpoint = f"{_API_BASE}/v1/videos/image2video"
+            else:
+                payload = {
+                    "model":        self._model,
+                    "prompt":       _cinematic_prompt(visual_description, narration),
+                    "duration":     "5",
+                    "aspect_ratio": aspect,
+                    "cfg_scale":    0.5,
+                    "mode":         "std",
+                }
+                endpoint = f"{_API_BASE}/v1/videos/text2video"
+
+            r = requests.post(endpoint, headers=headers, json=payload, timeout=60)
             if r.status_code not in (200, 201):
                 log.warning(f"  Kling submit failed: {r.status_code} {r.text[:300]}")
                 return None
@@ -81,20 +106,21 @@ class KlingEngine:
                 log.warning(f"  Kling: no task_id in response: {data}")
                 return None
 
-            log.info(f"  Kling job {task_id} queued  model={self._model}")
-            return self._poll(task_id, headers, out_path)
+            mode = "image2video" if self._char_ref else "text2video"
+            log.info(f"  Kling job {task_id} queued  model={self._model}  mode={mode}")
+            return self._poll(task_id, headers, out_path, mode=mode)
 
         except Exception as e:
             log.warning(f"  Kling error: {e}")
             return None
 
-    def _poll(self, task_id: str, headers: dict, out_path: Path, max_wait: int = 300) -> Path:
+    def _poll(self, task_id: str, headers: dict, out_path: Path, max_wait: int = 300, mode: str = "text2video") -> Path:
         deadline = time.time() + max_wait
         while time.time() < deadline:
             time.sleep(10)
             try:
                 r = requests.get(
-                    f"{_API_BASE}/v1/videos/text2video/{task_id}",
+                    f"{_API_BASE}/v1/videos/{mode}/{task_id}",
                     headers=headers, timeout=30,
                 )
                 if r.status_code != 200:

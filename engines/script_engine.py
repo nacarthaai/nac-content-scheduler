@@ -41,10 +41,11 @@ _JSON_SCHEMA = """
 # ── NacArtha character lock — injected into every visual_prompt ───────────────
 _CHARACTER_LOCK = """
 NACARTHA CHARACTER (STRICT IDENTITY LOCK — use in every scene featuring him):
-Indian male, 28-32. Sharp matte-black blazer, crisp white shirt, gold tie pin.
-Dark well-groomed hair, sharp jawline, calm confident expression.
-NEVER changes appearance. Background: dark luxury trading office, Bloomberg
-terminals glowing gold and blue. Cinematic dramatic lighting throughout.
+Indian male, 28-35. Black leather jacket over dark shirt. Short dark wavy hair,
+medium-dark complexion, sharp jawline, clean-shaven. Calm, focused, intelligent
+expression. Slim athletic build. NEVER changes appearance between scenes.
+Background: dark luxury trading office, multiple Bloomberg terminals glowing
+electric blue and white, dim gold accent lighting. Cinematic dramatic lighting.
 """
 
 _RULES = """Rules:
