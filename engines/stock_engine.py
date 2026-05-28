@@ -25,9 +25,10 @@ class StockEngine:
         self._key = os.environ.get("PEXELS_API_KEY", "")
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    def fetch(self, keywords: list[str], orientation: str = "landscape", min_duration: int = 5, variant: str = "") -> Path:
-        # Pexels needs short search terms — extract first 3 words from the visual prompt
-        query = " ".join(" ".join(keywords).split()[:3])
+    def fetch(self, prompt, orientation: str = "landscape", min_duration: int = 5, variant: str = "") -> Path:
+        # Pexels needs short search terms — extract first 3 meaningful words from the prompt
+        text  = prompt if isinstance(prompt, str) else " ".join(prompt)
+        query = " ".join(text.split()[:3])
         # Include today's date + variant (scene id) so each scene gets its own independent clip,
         # even when multiple scenes share the same visual keywords.
         today = date.today().isoformat()

@@ -26,7 +26,7 @@ _JSON_SCHEMA = """
     {{
       "id": 1,
       "narration": "3-5 sentences, 25-35 words",
-      "visual_keywords": ["cinematic scene description matching this scene's narration"],
+      "visual_prompt": "Full cinematic AI video generation prompt for this scene — see rules below",
       "emotion": "clarity",
       "pace": "hook",
       "is_hero_shot": false,
@@ -37,6 +37,15 @@ _JSON_SCHEMA = """
     {{ "same schema, 3 scenes only" }}
   ]
 }}"""
+
+# ── NacArtha character lock — injected into every visual_prompt ───────────────
+_CHARACTER_LOCK = """
+NACARTHA CHARACTER (STRICT IDENTITY LOCK — use in every scene featuring him):
+Indian male, 28-32. Sharp matte-black blazer, crisp white shirt, gold tie pin.
+Dark well-groomed hair, sharp jawline, calm confident expression.
+NEVER changes appearance. Background: dark luxury trading office, Bloomberg
+terminals glowing gold and blue. Cinematic dramatic lighting throughout.
+"""
 
 _RULES = """Rules:
 - long_scenes: exactly 10 scenes, narration total ~290-320 words
@@ -52,8 +61,17 @@ _RULES = """Rules:
 - HOOK FIRST WORD RULE: Scene 1 narration MUST start with a number, dollar amount, or action word. FORBIDDEN first words: "Today", "So", "Welcome", "In this", "I'm", "Hey", "Let me". REQUIRED: "$55", "Three trades", "CRASHED", "Zero.", "47%", "I lost"
 - short_scenes scene 1: first word must be a number or shocking statement. Viewer decides in 1 second.
 - Mark exactly 1 long_scene and 1 short_scene as is_hero_shot: true
-- visual_keywords: one vivid natural-language prompt describing the AI image/video for THIS scene — specific, cinematic, matches the narration. Examples: "glowing RSI oscillator crossing oversold threshold dark Bloomberg terminal", "Python momentum signal triggering buy order green flash on screen", "gold candlestick breakout pattern dramatic cinematic lighting close-up". Every scene must have a DIFFERENT visual.
-- short_scenes: scene 1 must open IMMEDIATELY — no warmup. Shorts viewers decide in 2 seconds.
+
+VISUAL_PROMPT RULES — write each as a full cinematic AI video generation prompt:
+""" + _CHARACTER_LOCK + """
+- Format: SETTING + CHARACTER ACTION (with timing 0-2s, 2-5s etc) + CAMERA + LIGHTING + AUDIO
+- Hook scene: NacArtha turns to camera. "0-2s: Back to camera, slow turn, direct eye contact. 2-4s: Arms open wide, terminals glow behind. Camera: slow push-in. Lighting: gold dramatic backlight. Audio: terminal hum."
+- Reveal scene: extreme close-up on stat/screen. "0-2s: ECU on Bloomberg terminal, red P&L -$55. Cursor blinks. 2-4s: Slow pull-back reveals NacArtha's face, expressionless. Micro slow-motion 0.2s on the number. Audio: single keystroke, silence."
+- Normal scene: NacArtha at work. "0-5s: NacArtha at standing desk, scrolling terminal. Points to RSI line crossing threshold. Camera: medium shot, slight handheld. Lighting: cool blue terminal glow, warm accent. Audio: keyboard clicks."
+- CTA scene: direct to lens. "0-5s: NacArtha faces camera, leans forward slightly. Confident, direct. Terminal array behind. Text appears: follow for tomorrow. Camera: locked-off medium close-up."
+- Every scene must have a DIFFERENT visual — no repeated settings or actions
+- Do NOT include narration text in visual_prompt — only describe what is SEEN
+- short_scenes: scene 1 must start mid-action, no warmup
 - NO filler: no "in this video", "don't forget to subscribe", "stay tuned"
 - OUTPUT: Return ONLY valid JSON — no explanation, no markdown fences"""
 

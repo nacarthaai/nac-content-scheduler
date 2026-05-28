@@ -240,7 +240,7 @@ def _fetch_clips(
         sid       = scene["id"]
         clip_path = clip_dir / f"scene_{sid:03d}.mp4"
         pace      = scene.get("pace", "normal")
-        visual    = ", ".join(scene.get("visual_keywords", ["finance", "trading", "market"]))
+        visual    = scene.get("visual_prompt", ", ".join(scene.get("visual_keywords", ["finance", "trading", "market"])))
         narration = scene.get("narration", "")
         result    = None
 
@@ -255,9 +255,9 @@ def _fetch_clips(
 
         # ── normal → FLUX image → Pexels fallback ────────────────────────────
         variant = f"{label}_{sid}"
-        result  = openart_engine.fetch(scene.get("visual_keywords", []), orientation, variant=variant)
+        result  = openart_engine.fetch(visual, orientation, variant=variant)
         if not result:
-            result = stock_engine.fetch(scene.get("visual_keywords", []), orientation, variant=variant)
+            result = stock_engine.fetch(visual, orientation, variant=variant)
 
         if result:
             clips[sid] = result

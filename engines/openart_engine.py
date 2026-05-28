@@ -42,12 +42,12 @@ class OpenArtEngine:
         self._model = os.environ.get("FLUX_MODEL", _DEFAULT_FLUX)
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    def fetch(self, keywords: list, orientation: str = "landscape", variant: str = "") -> Path:
+    def fetch(self, prompt, orientation: str = "landscape", variant: str = "") -> Path:
         if not self._key:
             log.info("  REPLICATE_API_KEY not set — skipping OpenArt (Pexels fallback will be used)")
             return None
 
-        query     = ", ".join(keywords)   # full natural-language visual prompt
+        query     = prompt if isinstance(prompt, str) else ", ".join(prompt)
         today     = date.today().isoformat()
         cache_key = hashlib.md5(f"{query}:{orientation}:{today}:{variant}".encode()).hexdigest()[:12]
         cached    = CACHE_DIR / f"{cache_key}.mp4"
@@ -155,9 +155,13 @@ class OpenArtEngine:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _finance_prompt(keywords: str) -> str:
+def _finance_prompt(prompt: str) -> str:
+    # If the prompt is already a full cinematic visual_prompt (contains timing cues or camera directions),
+    # use it directly with just a no-text suffix for FLUX image generation.
+    if any(kw in prompt for kw in ("0-2s:", "0-5s:", "Camera:", "Lighting:", "Audio:", "cinematic")):
+        return prompt + " Photorealistic 4K still frame. No text, no watermarks, no subtitles."
     return (
-        f"Professional finance and trading scene: {keywords}. "
+        f"Professional finance and trading scene: {prompt}. "
         "Dark luxury aesthetic, gold and black color palette, "
         "cinematic dramatic lighting, ultra-realistic 4K quality. "
         "No people, no text, no logos, no watermarks. "
