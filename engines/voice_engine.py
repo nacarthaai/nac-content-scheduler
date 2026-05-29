@@ -1,8 +1,14 @@
 """
-VoiceEngine — ElevenLabs multilingual primary, Edge TTS fallback.
+VoiceEngine — Per-language TTS routing.
 
-ElevenLabs eleven_multilingual_v2 handles EN, HI, and TE natively.
-Edge TTS is the fallback when ElevenLabs key is unavailable or fails.
+EN  → ElevenLabs Brian (eleven_multilingual_v2) — deep authoritative English
+HI  → ElevenLabs with Hindi-specific voice ID (ELEVENLABS_VOICE_ID_HI) if set,
+       else Edge TTS hi-IN-MadhurNeural (male, natural Hindi)
+TE  → ElevenLabs with Telugu-specific voice ID (ELEVENLABS_VOICE_ID_TE) if set,
+       else Edge TTS te-IN-MohanNeural (male, natural Telugu)
+
+Why separate voices: English voice Brian speaking Hindi/Telugu sounds unnatural.
+Native Neural voices for each language match the NacArtha male character.
 """
 import asyncio
 import json
@@ -14,15 +20,18 @@ from pathlib import Path
 
 log = logging.getLogger("voice_engine")
 
-ELEVENLABS_VOICE_ID = "nPczCjzI2devNBz1zQrb"  # Brian — deep authoritative male
-ELEVENLABS_TTS_URL = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
+# ElevenLabs voice IDs — per language
+ELEVENLABS_VOICE_EN = os.environ.get("ELEVENLABS_VOICE_ID_EN", "nPczCjzI2devNBz1zQrb")  # Brian
+ELEVENLABS_VOICE_HI = os.environ.get("ELEVENLABS_VOICE_ID_HI", "")  # set in Railway for Hindi
+ELEVENLABS_VOICE_TE = os.environ.get("ELEVENLABS_VOICE_ID_TE", "")  # set in Railway for Telugu
 
-# Edge TTS voices — used only when ElevenLabs is unavailable
-# Swara (female) and Shruti (female) sound more natural than the male variants for educational content
+ELEVENLABS_TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+
+# Edge TTS fallback voices — male, consistent with NacArtha character
 EDGE_VOICES = {
     "en": ("en-US-BrianNeural",   "-3%"),
-    "hi": ("hi-IN-SwaraNeural",   "0%"),   # female, clearer enunciation than Madhur
-    "te": ("te-IN-ShrutiNeural",  "0%"),   # female, clearer than Mohan
+    "hi": ("hi-IN-MadhurNeural",  "0%"),   # male, authoritative Hindi
+    "te": ("te-IN-MohanNeural",   "0%"),   # male, natural Telugu
 }
 
 
@@ -35,13 +44,26 @@ class VoiceEngine:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         log.info(f"Voice [{lang}] {len(text)} chars → {out_path.name}")
 
-        # ElevenLabs eleven_multilingual_v2 handles EN, HI, and TE natively
         if self._el_key:
-            if self._elevenlabs_generate(text, out_path):
-                return out_path
-            log.warning(f"  ElevenLabs failed [{lang}], falling back to Edge TTS")
+            voice_id = self._voice_id_for_lang(lang)
+            if voice_id:
+                if self._elevenlabs_generate(text, out_path, voice_id):
+                    return out_path
+                log.warning(f"  ElevenLabs failed [{lang}], falling back to Edge TTS")
+            else:
+                log.info(f"  No ElevenLabs voice ID for [{lang}] — using Edge TTS directly")
 
         return self._edge_generate(text, out_path, lang)
+
+    def _voice_id_for_lang(self, lang: str) -> str:
+        """Return ElevenLabs voice ID for the given language, or empty string to skip ElevenLabs."""
+        if lang == "en":
+            return ELEVENLABS_VOICE_EN
+        if lang == "hi":
+            return ELEVENLABS_VOICE_HI   # empty = fall through to Edge TTS
+        if lang == "te":
+            return ELEVENLABS_VOICE_TE   # empty = fall through to Edge TTS
+        return ELEVENLABS_VOICE_EN
 
     def get_duration(self, mp3_path: Path) -> float:
         try:
@@ -53,9 +75,10 @@ class VoiceEngine:
         except Exception:
             return 0.0
 
-    def _elevenlabs_generate(self, text: str, out_path: Path) -> bool:
+    def _elevenlabs_generate(self, text: str, out_path: Path, voice_id: str) -> bool:
         try:
             import requests
+            url = ELEVENLABS_TTS_URL.format(voice_id=voice_id)
             headers = {"xi-api-key": self._el_key, "Content-Type": "application/json"}
             payload = {
                 "text": text,
@@ -67,17 +90,16 @@ class VoiceEngine:
                     "use_speaker_boost": True,
                 },
             }
-            r = requests.post(ELEVENLABS_TTS_URL, headers=headers, json=payload, timeout=120)
+            r = requests.post(url, headers=headers, json=payload, timeout=120)
             if r.status_code != 200:
                 log.warning(f"  ElevenLabs HTTP {r.status_code}: {r.text}")
                 return False
-            # Guard against ElevenLabs returning JSON error with 200 status
             content_type = r.headers.get("content-type", "")
             if "application/json" in content_type:
                 log.warning(f"  ElevenLabs returned JSON instead of audio: {r.text}")
                 return False
             out_path.write_bytes(r.content)
-            log.info(f"  ElevenLabs saved → {out_path.name} ({out_path.stat().st_size // 1024} KB)")
+            log.info(f"  ElevenLabs [{voice_id[:8]}…] saved → {out_path.name} ({out_path.stat().st_size // 1024} KB)")
             return True
         except Exception as e:
             log.warning(f"  ElevenLabs error: {e}")
@@ -85,7 +107,7 @@ class VoiceEngine:
 
     def _edge_generate(self, text: str, out_path: Path, lang: str, retries: int = 3) -> Path:
         import edge_tts
-        voice, rate = EDGE_VOICES.get(lang, ("en-US-BrianNeural", "-3%"))
+        voice, rate = EDGE_VOICES.get(lang, EDGE_VOICES["en"])
         log.info(f"  Edge TTS [{lang}] voice={voice}")
         mp3_raw = out_path.with_stem(out_path.stem + "_raw")
 
