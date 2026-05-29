@@ -58,7 +58,10 @@ def _mark_lang_done(lang: str):
 
 
 def _youtube_uploaded_today(lang: str) -> bool:
-    """Check YouTube API to confirm a video was uploaded today for this language channel."""
+    """Check the channel's uploads playlist for a video published today.
+
+    Uses playlistItems (real-time) instead of search API (indexing delay can be hours).
+    """
     import requests
     client_id     = os.environ.get("YOUTUBE_CLIENT_ID", "")
     client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET", "")
@@ -67,6 +70,7 @@ def _youtube_uploaded_today(lang: str) -> bool:
         log.info(f"  YouTube check [{lang}]: credentials not configured — assuming not uploaded")
         return False
     try:
+        # 1. Refresh access token
         r = requests.post(
             "https://oauth2.googleapis.com/token",
             data={
@@ -82,25 +86,38 @@ def _youtube_uploaded_today(lang: str) -> bool:
             log.warning(f"  YouTube check [{lang}]: failed to get access token — {r.text[:200]}")
             return False
 
-        today_start = datetime.now(NY_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
-        today_utc   = today_start.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        headers = {"Authorization": f"Bearer {access_token}"}
 
+        # 2. Get the channel's uploads playlist ID (real-time, no indexing delay)
         r2 = requests.get(
-            "https://www.googleapis.com/youtube/v3/search",
-            params={
-                "part":           "snippet",
-                "forMine":        "true",
-                "type":           "video",
-                "publishedAfter": today_utc,
-                "maxResults":     1,
-            },
-            headers={"Authorization": f"Bearer {access_token}"},
+            "https://www.googleapis.com/youtube/v3/channels",
+            params={"part": "contentDetails", "mine": "true"},
+            headers=headers,
             timeout=30,
         )
         items = r2.json().get("items", [])
-        uploaded = len(items) > 0
-        log.info(f"  YouTube check [{lang}]: {'uploaded today ✓' if uploaded else 'not yet uploaded'}")
-        return uploaded
+        if not items:
+            log.warning(f"  YouTube check [{lang}]: no channel found for these credentials")
+            return False
+        uploads_playlist = items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
+
+        # 3. Check most recent uploads in that playlist (updates immediately on upload)
+        today_start = datetime.now(NY_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+        r3 = requests.get(
+            "https://www.googleapis.com/youtube/v3/playlistItems",
+            params={"part": "snippet", "playlistId": uploads_playlist, "maxResults": 10},
+            headers=headers,
+            timeout=30,
+        )
+        for item in r3.json().get("items", []):
+            published_str = item.get("snippet", {}).get("publishedAt", "")
+            if published_str:
+                pub_dt = datetime.fromisoformat(published_str.replace("Z", "+00:00"))
+                if pub_dt >= today_start:
+                    log.info(f"  YouTube check [{lang}]: uploaded today ✓ ({published_str})")
+                    return True
+        log.info(f"  YouTube check [{lang}]: not yet uploaded today")
+        return False
     except Exception as e:
         log.warning(f"  YouTube check [{lang}] error: {e}")
         return False
