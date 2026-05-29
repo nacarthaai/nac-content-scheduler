@@ -271,9 +271,15 @@ def _start_trigger_server():
         def _fire(self):
             if _pipeline_lock.locked():
                 return self._text(409, "Pipeline already running\n")
-            log.info("Manual trigger received via HTTP")
-            threading.Thread(target=_run_with_retry, daemon=True, name="ManualTrigger").start()
-            self._text(200, "Pipeline triggered\n")
+            # Parse ?langs=en or ?langs=en,hi — default all langs
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            params = dict(p.split("=", 1) for p in qs.split("&") if "=" in p)
+            langs_param = params.get("langs", "")
+            langs = [l.strip() for l in langs_param.split(",") if l.strip() in _ALL_LANGS] or list(_ALL_LANGS)
+            log.info(f"Manual trigger received via HTTP — langs={langs} (bypassing YouTube check)")
+            # Pass langs explicitly to skip _pending_langs() / YouTube done-check
+            threading.Thread(target=_run_with_retry, args=(langs,), daemon=True, name="ManualTrigger").start()
+            self._text(200, f"Pipeline triggered — langs={langs}\n")
 
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(("0.0.0.0", port), Handler)
