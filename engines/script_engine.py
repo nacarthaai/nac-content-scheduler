@@ -415,7 +415,7 @@ class ScriptEngine:
         client = anthropic.Anthropic(api_key=self._key)
         msg = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=4096,
+            max_tokens=8192,
             messages=[{"role": "user", "content": prompt}],
         )
         script = _parse_json(msg.content[0].text)
