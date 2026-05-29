@@ -76,9 +76,9 @@ PACE RULES:
 
 INTRO RULE (scene 1, pace: hook) — MANDATORY for every episode:
   Long video narration MUST open word-for-word with:
-    "Hey. NacArtha here. Welcome to my trading world."
+    "Hey. Nac here. Welcome to my trading world."
   Then pivot immediately to the single most tension-filled stat or moment — no warmup.
-  Example: "Hey. NacArtha here. Welcome to my trading world. Three trades. One I killed myself. Here's why."
+  Example: "Hey. Nac here. Welcome to my trading world. Three trades. One I killed myself. Here's why."
 
   Short video: "Hey. NacArtha." then the hook stat in the same breath.
   Example: "Hey. NacArtha. The bot just refused $1,200 in profit. On purpose."
@@ -335,7 +335,7 @@ OUTPUT: Return ONLY valid JSON matching this schema:
 
 Episode guidance:
 - Scene 1 (hook): Open with INTRO RULE phrase. Then a concrete failure or surprising result.
-  Example: "Hey. NacArtha here. Welcome to my trading world. I lost $340 ignoring this one number."
+  Example: "Hey. Nac here. Welcome to my trading world. I lost $340 ignoring this one number."
 - Scene 2-3: Plant open loop — "the formula is simpler than you think — I'll write it out exactly"
 - Scenes 4-8: Problem → concept → math/formula → how I use it → student asks a question → NacArtha explains at whiteboard
 - Scene 9 (reveal): The exact formula/result that resolves the open loop — shown on whiteboard
