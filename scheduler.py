@@ -106,12 +106,14 @@ def _run_with_retry(langs: list = None):
 
 
 def _startup_resume():
-    """Resume incomplete languages — but ONLY if it's already past 4 PM EDT today.
-    If we deploy before 4 PM, the cron handles it. Only resume after the cron window."""
+    """Resume incomplete languages only within the 60-minute window after cron fires (4:00-5:00 PM ET).
+    Outside that window, a restart is almost certainly a code deploy — not a crash recovery.
+    This prevents code pushes after 4 PM from triggering duplicate pipeline runs."""
     time.sleep(60)
     now = datetime.now(NY_TZ)
-    if now.hour < 16:
-        log.info(f"Startup resume skipped — only {now.hour}:{now.minute:02d} ET, cron fires at 16:00")
+    in_resume_window = (now.hour == 16) or (now.hour == 17 and now.minute < 15)
+    if not in_resume_window:
+        log.info(f"Startup resume skipped — {now.hour}:{now.minute:02d} ET outside 4:00-5:15 PM window (deploy restart, not crash)")
         return
     pending = _pending_langs()
     if pending:
@@ -214,3 +216,4 @@ try:
     scheduler.start()
 except (KeyboardInterrupt, SystemExit):
     log.info("Scheduler stopped")
+
