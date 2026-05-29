@@ -5,8 +5,11 @@ Runs 24/7 on Railway. Fires the video pipeline at exactly 4:00 PM EDT daily.
 Manual trigger: POST /run  (or GET /run?token=<TRIGGER_TOKEN>)
 
 Resilience:
-  - Per-language completion markers in output/.done_LANG_YYYY-MM-DD
-  - On startup, auto-resumes any languages not yet done today (handles redeploy mid-run)
+  - On startup: if before 4 PM ET → skip (cron handles it)
+  - On startup: if after 4 PM ET → check YouTube API to see if video was actually
+    uploaded today for each language. Only run for languages not yet uploaded.
+    YouTube is used as source of truth because Railway wipes the filesystem on
+    every redeploy, making local .done files unreliable.
   - /run returns 409 if pipeline is already running (prevents double-trigger)
 """
 import logging
@@ -14,7 +17,7 @@ import os
 import sys
 import time
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -46,17 +49,77 @@ def _done_file(lang: str) -> Path:
     return _OUTPUT / f".done_{lang}_{_today()}"
 
 
-def _pending_langs() -> list:
-    """Return languages that haven't completed successfully today."""
-    return [l for l in _ALL_LANGS if not _done_file(l).exists()]
-
-
 def _mark_lang_done(lang: str):
     try:
         _OUTPUT.mkdir(parents=True, exist_ok=True)
         _done_file(lang).touch()
     except Exception:
         pass
+
+
+def _youtube_uploaded_today(lang: str) -> bool:
+    """Check YouTube API to confirm a video was uploaded today for this language channel."""
+    import requests
+    client_id     = os.environ.get("YOUTUBE_CLIENT_ID", "")
+    client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET", "")
+    refresh_token = os.environ.get(f"YOUTUBE_REFRESH_TOKEN_{lang.upper()}", "")
+    if not all([client_id, client_secret, refresh_token]):
+        log.info(f"  YouTube check [{lang}]: credentials not configured — assuming not uploaded")
+        return False
+    try:
+        r = requests.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id":     client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+                "grant_type":    "refresh_token",
+            },
+            timeout=30,
+        )
+        access_token = r.json().get("access_token", "")
+        if not access_token:
+            log.warning(f"  YouTube check [{lang}]: failed to get access token — {r.text[:200]}")
+            return False
+
+        today_start = datetime.now(NY_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_utc   = today_start.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        r2 = requests.get(
+            "https://www.googleapis.com/youtube/v3/search",
+            params={
+                "part":           "snippet",
+                "forMine":        "true",
+                "type":           "video",
+                "publishedAfter": today_utc,
+                "maxResults":     1,
+            },
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=30,
+        )
+        items = r2.json().get("items", [])
+        uploaded = len(items) > 0
+        log.info(f"  YouTube check [{lang}]: {'uploaded today ✓' if uploaded else 'not yet uploaded'}")
+        return uploaded
+    except Exception as e:
+        log.warning(f"  YouTube check [{lang}] error: {e}")
+        return False
+
+
+def _pending_langs() -> list:
+    """Return languages that haven't completed successfully today.
+    Filesystem markers are checked first (fast); YouTube API is the authoritative fallback
+    because Railway wipes the filesystem on every redeploy."""
+    pending = []
+    for lang in _ALL_LANGS:
+        if _done_file(lang).exists():
+            continue  # filesystem marker present — already done this session
+        if _youtube_uploaded_today(lang):
+            log.info(f"[{lang}] YouTube confirms video uploaded today — skipping")
+            _mark_lang_done(lang)  # recreate local marker so next check is instant
+            continue
+        pending.append(lang)
+    return pending
 
 
 def run_pipeline(langs: list, is_retry: bool = False) -> bool:
@@ -106,20 +169,26 @@ def _run_with_retry(langs: list = None):
 
 
 def _startup_resume():
-    """Resume incomplete languages only within the 60-minute window after cron fires (4:00-5:00 PM ET).
-    Outside that window, a restart is almost certainly a code deploy — not a crash recovery.
-    This prevents code pushes after 4 PM from triggering duplicate pipeline runs."""
+    """On startup: skip if before 4 PM ET (cron handles it).
+    After 4 PM: use YouTube API to check what's already uploaded — only run pending langs."""
     time.sleep(60)
     now = datetime.now(NY_TZ)
-    in_resume_window = (now.hour == 16) or (now.hour == 17 and now.minute < 15)
-    if not in_resume_window:
-        log.info(f"Startup resume skipped — {now.hour}:{now.minute:02d} ET outside 4:00-5:15 PM window (deploy restart, not crash)")
+
+    if now.hour < 16:
+        log.info(f"Startup resume skipped — {now.hour}:{now.minute:02d} ET is before 4 PM cron window")
         return
+
+    # After 4 PM — YouTube is source of truth for what's already been uploaded today
+    log.info(f"Startup at {now.hour}:{now.minute:02d} ET (after 4 PM) — checking YouTube for today's uploads")
     pending = _pending_langs()
-    if pending:
-        log.info(f"Startup resume — incomplete langs today: {pending}")
-        _telegram(f"🔄 NacArtha resuming incomplete langs: {pending}")
-        _run_with_retry(langs=pending)
+
+    if not pending:
+        log.info("Startup resume: all languages confirmed uploaded on YouTube today — skipping")
+        return
+
+    log.info(f"Startup resume — not yet on YouTube: {pending}")
+    _telegram(f"🔄 NacArtha resuming: {pending}")
+    _run_with_retry(langs=pending)
 
 
 def _telegram(text: str):
@@ -206,7 +275,7 @@ scheduler.add_job(
 
 _start_trigger_server()
 
-# Auto-resume any incomplete languages from a previous interrupted run
+# On restart: check YouTube to resume any incomplete languages (only after 4 PM ET)
 threading.Thread(target=_startup_resume, daemon=True, name="StartupResume").start()
 
 now_ny = datetime.now(NY_TZ)
@@ -216,4 +285,3 @@ try:
     scheduler.start()
 except (KeyboardInterrupt, SystemExit):
     log.info("Scheduler stopped")
-
