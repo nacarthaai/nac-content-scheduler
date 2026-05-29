@@ -8,14 +8,8 @@ Monthly free clip budgets (5-second clips):
 
 Priority order: Kling → Hailuo → Seedance (paid Replicate fallback)
 
-Usage tracked in a JSON file: output/.videogen_usage_YYYY-MM.json
-{
-  "kling":   <int count>,
-  "hailuo":  <int count>,
-  "seedance_free": <int count>
-}
-
-Env vars control which engines are active (same as their individual engines).
+Set FORCE_ENGINE=seedance to skip free tiers and use Seedance directly.
+Useful for high-quality test runs or when free credits are exhausted.
 """
 import json
 import logging
@@ -64,12 +58,6 @@ def _under_limit(usage: dict, engine: str) -> bool:
 
 
 class VideoGenRouter:
-    """
-    Drop-in replacement for SeedanceEngine in nac_orchestrator.
-    Same interface: generate(visual, out_path, orientation, narration) → Path | None
-    Routes to the cheapest available engine that still has free credits.
-    Falls back to paid Seedance (Replicate) only when all free tiers are exhausted.
-    """
 
     def __init__(self):
         from engines.kling_engine    import KlingEngine
@@ -79,8 +67,15 @@ class VideoGenRouter:
         self._kling    = KlingEngine()
         self._hailuo   = HailuoEngine()
         self._seedance = SeedanceEngine()
+        self._force    = os.environ.get("FORCE_ENGINE", "").lower()  # "seedance" to skip free tiers
 
     def generate(self, visual_description: str, out_path: Path, orientation: str = "landscape", narration: str = "") -> Path:
+
+        # ── Force Seedance mode (set FORCE_ENGINE=seedance in Railway env) ────
+        if self._force == "seedance":
+            log.info("  Router → Seedance (FORCE_ENGINE=seedance)")
+            return self._seedance.generate(visual_description, out_path, orientation, narration)
+
         usage = _load_usage()
 
         # ── 1. Kling (66/month free) ──────────────────────────────────────────
@@ -103,10 +98,9 @@ class VideoGenRouter:
                 return result
             log.warning("  Router: Hailuo failed — trying Seedance paid")
 
-        # ── 3. Seedance paid (Replicate) — always available if key set ────────
+        # ── 3. Seedance paid (Replicate) ──────────────────────────────────────
         log.info("  Router → Seedance (paid Replicate)")
-        result = self._seedance.generate(visual_description, out_path, orientation, narration)
-        return result
+        return self._seedance.generate(visual_description, out_path, orientation, narration)
 
     def monthly_usage_report(self) -> str:
         usage  = _load_usage()
@@ -118,4 +112,6 @@ class VideoGenRouter:
             total += used
             lines.append(f"  {engine:<16} {used:>3}/{limit} clips")
         lines.append(f"  {'TOTAL FREE':<16} {total:>3}/{sum(_MONTHLY_LIMITS.values())}")
+        if self._force:
+            lines.append(f"  FORCE_ENGINE={self._force}")
         return "\n".join(lines)
