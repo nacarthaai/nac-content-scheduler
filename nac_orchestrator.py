@@ -1,16 +1,19 @@
 """
-NacArtha Cinematic Pipeline
+NacArtha Cinematic Pipeline v2
 
-1 master long video (4 min) + 1 short (50 sec) in English
-→ Translated to Hindi + Telugu (same visuals, different ElevenLabs audio)
-→ Uploaded to 3 separate YouTube channels
+Every clip is purpose-built using Seedance 2.0:
+  - reference_images: NacArtha character sheets → consistent photorealistic character
+  - reference_audios: ElevenLabs narration audio → automatic lip sync
 
-AI video (hook/reveal/cta scenes):
-  VideoGenRouter rotates: Kling (66/mo free) → Hailuo (30/mo free) → Seedance paid (Replicate)
-Scene footage (normal scenes):
-  OpenArtEngine — FLUX image → Ken Burns video (Replicate)
-  Falls back to StockEngine (Pexels) if REPLICATE_API_KEY unset or FLUX fails
-Voices:          ElevenLabs multilingual_v2 → Edge TTS fallback
+Flow per language:
+  1. Translate script
+  2. Generate narration audio (ElevenLabs / Edge TTS fallback)
+  3. For each scene: Seedance 2.0 (character ref + audio) → lip-synced clip
+  4. FFmpeg assembles final video with HUD overlays + music
+  5. Upload to YouTube
+
+No Ken Burns, no stock footage, no generic B-roll.
+Every visual matches exactly what Nac is saying.
 """
 import argparse
 import json
@@ -23,16 +26,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from engines.script_engine import ScriptEngine
-from engines.topic_selector import TopicSelector
-from engines.voice_engine import VoiceEngine
-from engines.stock_engine import StockEngine
-from engines.openart_engine import OpenArtEngine
-from engines.videogen_router import VideoGenRouter
+from engines.script_engine   import ScriptEngine
+from engines.topic_selector  import TopicSelector
+from engines.voice_engine    import VoiceEngine
+from engines.seedance_engine import SeedanceEngine
 from engines.video_assembler import VideoAssembler
 from engines.thumbnail_engine import ThumbnailEngine
-from engines.music_engine import MusicEngine
-from engines.upload_engine import UploadEngine
+from engines.music_engine    import MusicEngine
+from engines.upload_engine   import UploadEngine
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,29 +53,28 @@ def main(langs: list = None, on_lang_done=None):
         pass
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--topic", default="", help="Topic ID (blank = auto-select)")
+    parser.add_argument("--topic",      default="", help="Topic ID (blank = auto-select)")
     parser.add_argument("--topic-type", default="", help="Force type: bot | news | evergreen")
-    parser.add_argument("--lang", default="all", help="en | hi | te | all")
+    parser.add_argument("--lang",       default="all", help="en | hi | te | all")
     args = parser.parse_args()
 
     if langs is None:
         langs = ["en", "hi", "te"] if args.lang == "all" else [args.lang]
-    run_id = datetime.now().strftime("nac_%Y%m%d_%H%M%S")
+
+    run_id  = datetime.now().strftime("nac_%Y%m%d_%H%M%S")
     run_dir = OUTPUT_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
     log.info(f"=== NacArtha Pipeline  run={run_id}  langs={langs}  topic={args.topic or 'auto'} ===")
 
-    topic_selector   = TopicSelector()
-    script_engine    = ScriptEngine()
-    voice_engine     = VoiceEngine()
-    stock_engine     = StockEngine()      # Pexels fallback
-    openart_engine   = OpenArtEngine()    # FLUX image → Ken Burns video (Replicate)
-    videogen_router  = VideoGenRouter()   # AI video: Kling → Hailuo → Seedance paid
-    assembler        = VideoAssembler()
+    topic_selector  = TopicSelector()
+    script_engine   = ScriptEngine()
+    voice_engine    = VoiceEngine()
+    seedance        = SeedanceEngine()
+    assembler       = VideoAssembler()
     thumbnail_engine = ThumbnailEngine()
-    music_engine     = MusicEngine()
-    uploader         = UploadEngine(
+    music_engine    = MusicEngine()
+    uploader        = UploadEngine(
         client_id=os.environ.get("YOUTUBE_CLIENT_ID", ""),
         client_secret=os.environ.get("YOUTUBE_CLIENT_SECRET", ""),
         refresh_tokens={
@@ -84,7 +84,7 @@ def main(langs: list = None, on_lang_done=None):
         },
     )
 
-    # ── 1. Select topic + generate EN master script ─────────────────────────────
+    # ── 1. Select topic + generate EN master script ──────────────────────────
     if args.topic:
         from engines.topic_selector import BOT_BRAND_TOPICS, EDUCATIONAL_TOPICS
         all_topics = BOT_BRAND_TOPICS + EDUCATIONAL_TOPICS
@@ -97,20 +97,13 @@ def main(langs: list = None, on_lang_done=None):
     log.info(f"Generating EN master script [{topic.get('type','?')}]: {topic.get('title','')}")
     en_script = script_engine.generate_en(topic=topic)
     (run_dir / "script_en.json").write_text(json.dumps(en_script, ensure_ascii=False, indent=2))
-    log.info(f"Topic: {en_script['title']}")
 
-    # ── 2. Select music for this topic ──────────────────────────────────────────
+    # ── 2. Select music ──────────────────────────────────────────────────────
     music_path = music_engine.select(en_script.get("topic_id", ""), en_script.get("topic_type", ""))
     log.info(f"Music: {music_path.name if music_path else 'none'}")
 
-    # ── 3. Fetch video clips (shared — same visuals for all 3 channels) ─────────
-    # Short clips are mapped from long clips (center-cropped landscape→portrait by assembler).
-    # No separate portrait Seedance/FLUX calls — saves ~$0.22/day.
-    log.info("Fetching video clips…")
-    clips_long  = _fetch_clips(en_script["long_scenes"], run_dir, "long", stock_engine, openart_engine, videogen_router)
-    clips_short = _map_short_clips(en_script["short_scenes"], en_script["long_scenes"], clips_long)
-
-    # ── 4. Per-channel pipeline ─────────────────────────────────────────────────
+    # ── 3. Per-language pipeline ─────────────────────────────────────────────
+    # Each language gets its own clips because lip sync is per audio track.
     results = {}
 
     for lang in langs:
@@ -124,12 +117,24 @@ def main(langs: list = None, on_lang_done=None):
                 json.dumps(script, ensure_ascii=False, indent=2)
             )
 
-            # Generate narration audio per scene (translated audio, English visuals)
+            # ── 3a. Generate narration audio FIRST (needed for lip sync) ────
+            log.info(f"  [{lang}] Generating narration audio…")
             long_scenes  = _generate_audio(script["long_scenes"],  lang_dir / "audio" / "long",  voice_engine, lang)
             short_scenes = _generate_audio(script["short_scenes"], lang_dir / "audio" / "short", voice_engine, lang)
 
-            # Overwrite text_overlay on every scene with the English version —
-            # translated overlays render as boxes since Railway only has DejaVu Sans.
+            # ── 3b. Generate video clips with Seedance 2.0 (lip synced) ────
+            log.info(f"  [{lang}] Generating video clips with Seedance 2.0…")
+            clips_long  = _generate_clips(long_scenes,  lang_dir / "clips" / "long",  seedance, "landscape")
+            clips_short = _generate_clips(short_scenes, lang_dir / "clips" / "short", seedance, "portrait")
+
+            # Attach clip paths to scenes
+            fallback = _black_clip(run_dir)
+            for s in long_scenes:
+                s["video_path"] = str(clips_long.get(s["id"], fallback))
+            for s in short_scenes:
+                s["video_path"] = str(clips_short.get(s["id"], fallback))
+
+            # Text overlays always in English (translated glyphs don't render on Railway)
             en_long_overlays  = {s["id"]: s.get("text_overlay") for s in en_script["long_scenes"]}
             en_short_overlays = {s["id"]: s.get("text_overlay") for s in en_script["short_scenes"]}
             for s in long_scenes:
@@ -137,42 +142,43 @@ def main(langs: list = None, on_lang_done=None):
             for s in short_scenes:
                 s["text_overlay"] = en_short_overlays.get(s["id"])
 
-            # Attach clip paths
-            fallback = _black_clip(run_dir)
-            for s in long_scenes:
-                s["video_path"] = str(clips_long.get(s["id"], fallback))
-            for s in short_scenes:
-                s["video_path"] = str(clips_short.get(s["id"], fallback))
-
-            # Assemble videos — all burned-in text always in English
+            # ── 3c. Assemble ────────────────────────────────────────────────
             long_path  = lang_dir / "long.mp4"
             short_path = lang_dir / "short.mp4"
 
             log.info(f"  [{lang}] Assembling long video…")
-            assembler.assemble(long_scenes,  long_path,  "landscape", music_path,
-                               hook_text=en_script.get("hook_text", ""),
-                               cta_text=en_script.get("cta_text", ""))
+            assembler.assemble(
+                long_scenes, long_path, "landscape", music_path,
+                hook_text=en_script.get("hook_text", ""),
+                cta_text=en_script.get("cta_text", ""),
+            )
 
             log.info(f"  [{lang}] Assembling short video…")
-            assembler.assemble(short_scenes, short_path, "portrait",  music_path,
-                               hook_text=en_script.get("hook_text", ""),
-                               cta_text=en_script.get("cta_text", ""))
+            assembler.assemble(
+                short_scenes, short_path, "portrait", music_path,
+                hook_text=en_script.get("hook_text", ""),
+                cta_text=en_script.get("cta_text", ""),
+            )
 
-            # Thumbnail — always English title (font has no Devanagari/Telugu glyphs)
+            # ── 3d. Thumbnail ────────────────────────────────────────────────
             thumb_path = lang_dir / "thumbnail.jpg"
             thumbnail_engine.generate(en_script["title"], lang, thumb_path)
 
-            # Upload to YouTube
+            # ── 3e. Upload ───────────────────────────────────────────────────
             refresh_token = uploader.refresh_tokens.get(lang, "")
             if not refresh_token:
                 log.warning(f"  [{lang}] No refresh token — skipping upload")
                 results[lang] = {"status": "no_token", "long": str(long_path), "short": str(short_path)}
+                if on_lang_done:
+                    on_lang_done(lang)
                 continue
 
-            log.info(f"  [{lang}] Uploading long video…")
-            # Always use English description — translated descriptions render as boxes in video thumbnails/overlays
-            description = en_script["description"] + "\n\nMusic: Kevin MacLeod (incompetech.com) — Licensed under Creative Commons: By Attribution 3.0"
+            description = (
+                en_script["description"]
+                + "\n\nMusic: Kevin MacLeod (incompetech.com) — Licensed under Creative Commons: By Attribution 3.0"
+            )
 
+            log.info(f"  [{lang}] Uploading long video…")
             long_urls = uploader.upload_all_languages(
                 video_path=long_path,
                 thumbnail_path=thumb_path,
@@ -208,7 +214,7 @@ def main(langs: list = None, on_lang_done=None):
             log.error(f"[{lang.upper()}] CHANNEL FAILED: {ch_err}", exc_info=True)
             results[lang] = {"status": "error", "error": str(ch_err)}
 
-    # ── 4. Summary + Telegram ────────────────────────────────────────────────────
+    # ── 4. Summary + Telegram ────────────────────────────────────────────────
     summary = {"run_id": run_id, "topic": en_script.get("title"), "results": results}
     (run_dir / "run_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2))
     _notify_telegram(summary)
@@ -222,83 +228,36 @@ def main(langs: list = None, on_lang_done=None):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-_AI_VIDEO_PACES = {"hook", "reveal", "cta"}
-
-
-def _fetch_clips(
-    scenes: list[dict],
-    run_dir: Path,
-    label: str,
-    stock_engine: StockEngine,
-    openart_engine: OpenArtEngine,
-    videogen_router: VideoGenRouter,
-) -> dict:
-    clips: dict[int, Path] = {}
-    clip_dir = run_dir / "clips" / label
-    clip_dir.mkdir(parents=True, exist_ok=True)
-    orientation = "portrait" if label == "short" else "landscape"
-
-    for scene in scenes:
-        sid       = scene["id"]
-        clip_path = clip_dir / f"scene_{sid:03d}.mp4"
-        pace      = scene.get("pace", "normal")
-        visual    = scene.get("visual_prompt", ", ".join(scene.get("visual_keywords", ["finance", "trading", "market"])))
-        narration = scene.get("narration", "")
-        result    = None
-
-        # ── hook / reveal / cta → AI video (Kling → Hailuo → Seedance paid) ───
-        if pace in _AI_VIDEO_PACES:
-            log.info(f"  Scene {sid} [{pace}] → VideoGenRouter")
-            result = videogen_router.generate(visual, clip_path, orientation, narration=narration)
-            if result:
-                clips[sid] = result
-                continue
-            log.warning(f"  VideoGenRouter failed for scene {sid} [{pace}] — falling through to OpenArt")
-
-        # ── normal → FLUX image → Pexels fallback ────────────────────────────
-        variant = f"{label}_{sid}"
-        result  = openart_engine.fetch(visual, orientation, variant=variant)
-        if not result:
-            result = stock_engine.fetch(visual, orientation, variant=variant)
-
-        if result:
-            clips[sid] = result
-        else:
-            log.warning(f"  No clip for scene {sid} — will use black fallback")
-
-    return clips
-
-
-def _map_short_clips(short_scenes: list, long_scenes: list, clips_long: dict) -> dict:
-    """Map short scenes to existing long clips — short[0]→hook, short[1]→hero, short[2]→cta."""
-    long_ids = [s["id"] for s in long_scenes]
-    hero_id  = next((s["id"] for s in long_scenes if s.get("is_hero_shot")), long_ids[len(long_ids) // 2])
-    sources  = [long_ids[0], hero_id, long_ids[-1]]
-    clips    = {}
-    for i, scene in enumerate(short_scenes):
-        src_id = sources[i] if i < len(sources) else long_ids[0]
-        clip   = clips_long.get(src_id)
-        if clip:
-            clips[scene["id"]] = clip
-    return clips
-
-
-def _generate_audio(
-    scenes: list[dict],
-    out_dir: Path,
-    voice_engine: VoiceEngine,
-    lang: str,
-) -> list[dict]:
+def _generate_audio(scenes: list, out_dir: Path, voice_engine: VoiceEngine, lang: str) -> list:
     out_dir.mkdir(parents=True, exist_ok=True)
     result = []
     for scene in scenes:
-        sid = scene["id"]
+        sid        = scene["id"]
         audio_path = out_dir / f"scene_{sid:03d}.mp3"
         voice_engine.generate(scene["narration"], audio_path, lang)
         s = dict(scene)
         s["narration_path"] = str(audio_path)
         result.append(s)
     return result
+
+
+def _generate_clips(scenes: list, out_dir: Path, seedance: SeedanceEngine, orientation: str) -> dict:
+    """Generate one Seedance 2.0 clip per scene, with lip sync from narration audio."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    clips = {}
+    for scene in scenes:
+        sid        = scene["id"]
+        clip_path  = out_dir / f"scene_{sid:03d}.mp4"
+        visual     = scene.get("visual_prompt") or ", ".join(scene.get("visual_keywords", ["NacArtha trading room"]))
+        audio_path = Path(scene.get("narration_path", "")) if scene.get("narration_path") else None
+
+        log.info(f"  Scene {sid} [{scene.get('pace','?')}] → Seedance 2.0")
+        result = seedance.generate(visual, clip_path, orientation, audio_path=audio_path)
+        if result:
+            clips[sid] = result
+        else:
+            log.warning(f"  Scene {sid}: Seedance failed — will use black fallback")
+    return clips
 
 
 def _black_clip(run_dir: Path) -> Path:
@@ -308,7 +267,7 @@ def _black_clip(run_dir: Path) -> Path:
         subprocess.run([
             "ffmpeg", "-y",
             "-f", "lavfi", "-i", "color=c=black:s=1920x1080:r=30",
-            "-t", "10", "-c:v", "libx264", "-crf", "23", str(fb),
+            "-t", "5", "-c:v", "libx264", "-crf", "23", str(fb),
         ], capture_output=True)
     return fb
 
