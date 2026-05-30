@@ -70,6 +70,24 @@ def _telegram(text: str):
         pass
 
 
+def _fire_pipeline(langs: list):
+    if not _pipeline_lock.acquire(blocking=False):
+        log.warning("Pipeline already running — skipping manual fire")
+        return
+    try:
+        import sys as _sys
+        _sys.modules.pop("nac_orchestrator", None)
+        import nac_orchestrator
+        log.info(f"=== Manual fire: langs={langs} ===")
+        nac_orchestrator.main(langs=langs, on_lang_done=_mark_lang_done)
+        log.info("=== Manual fire complete ===")
+    except Exception as e:
+        log.error(f"Manual fire failed: {e}", exc_info=True)
+        _telegram(f"❌ NacArtha manual fire FAILED:\n`{e}`")
+    finally:
+        _pipeline_lock.release()
+
+
 def _start_dashboard_server():
     """Status dashboard only — no trigger endpoint."""
     token     = os.environ.get("TRIGGER_TOKEN", "")
@@ -98,12 +116,41 @@ def _start_dashboard_server():
                 self.wfile.write(body)
 
         def do_POST(self):
-            body = b"not found"
-            self.send_response(404)
-            self.send_header("Content-Type", "text/plain")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            from urllib.parse import urlparse, parse_qs
+            parsed = urlparse(self.path)
+            if parsed.path == "/fire":
+                qs    = parse_qs(parsed.query)
+                tok   = qs.get("token", [""])[0]
+                if token and tok != token:
+                    body = b"unauthorized"
+                    self.send_response(403)
+                    self.send_header("Content-Type", "text/plain")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                langs_param = qs.get("langs", ["en,hi,te"])[0]
+                langs = [l.strip() for l in langs_param.split(",") if l.strip()]
+                if _pipeline_lock.locked():
+                    body = b"pipeline already running"
+                    self.send_response(409)
+                else:
+                    threading.Thread(
+                        target=_fire_pipeline, args=(langs,), daemon=True
+                    ).start()
+                    body = f"pipeline fired for langs={langs}".encode()
+                    self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                body = b"not found"
+                self.send_response(404)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
 
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(("0.0.0.0", port), Handler)
