@@ -28,8 +28,8 @@ MODEL         = "bytedance/seedance-2.0"
 
 _ASSETS = Path(__file__).parent.parent / "assets"
 _REF_IMAGES = [
-    _ASSETS / "nac_ref_1.png",
-    _ASSETS / "nac_ref_2.png",
+    _ASSETS / "nac_ref_1_sm.jpg",
+    _ASSETS / "nac_ref_2_sm.jpg",
 ]
 
 
@@ -37,7 +37,8 @@ def _img_to_data_uri(path: Path) -> str | None:
     if not path.exists():
         return None
     b64 = base64.b64encode(path.read_bytes()).decode()
-    return f"data:image/png;base64,{b64}"
+    mime = "image/jpeg" if path.suffix.lower() in (".jpg", ".jpeg") else "image/png"
+    return f"data:{mime};base64,{b64}"
 
 
 def _audio_to_data_uri(path: Path) -> str | None:
@@ -56,9 +57,9 @@ class SeedanceEngine:
         self._ref_images = [_img_to_data_uri(p) for p in _REF_IMAGES if p.exists()]
 
         if self._ref_images:
-            log.info(f"  Seedance 2.0: {len(self._ref_images)} character reference images loaded from assets/")
+            log.info(f"  Seedance 2.0: {len(self._ref_images)} character reference images loaded ({[p.name for p in _REF_IMAGES if p.exists()]})")
         else:
-            log.warning("  Seedance 2.0: nac_ref_1.png / nac_ref_2.png not found in assets/ — no character lock")
+            log.warning("  Seedance 2.0: nac_ref_1_sm.jpg / nac_ref_2_sm.jpg not found in assets/ — no character lock")
 
     def generate(
         self,
@@ -84,14 +85,18 @@ class SeedanceEngine:
                 "aspect_ratio":     aspect,
                 "duration":         5,
                 "resolution":       "720p",
-                "generate_audio":   False,   # we supply our own ElevenLabs audio
+                "generate_audio":   False,
             }
 
-            # reference_images + reference_audios skipped:
-            #   - reference_images (face photos) trigger Replicate E005 content filter
-            #   - reference_audios requires reference_images (E006 if omitted)
-            # Character identity held via detailed prompt. Lip sync not active.
-            pass
+            if self._ref_images:
+                inp["reference_images"] = self._ref_images
+                log.info(f"  Sending {len(self._ref_images)} reference images for character lock")
+
+            if audio_path and audio_path.exists() and self._ref_images:
+                audio_url = self._upload_audio(audio_path)
+                if audio_url:
+                    inp["reference_audios"] = [audio_url]
+                    log.info("  Lip sync enabled via reference_audios")
 
             headers = {
                 "Authorization": f"Bearer {self._key}",

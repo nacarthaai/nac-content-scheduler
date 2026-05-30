@@ -75,54 +75,29 @@ class VideoAssembler:
         if duration <= 0:
             duration = 8.0
 
-        pan_dir = 1 if scene_idx % 2 == 0 else -1
-
         if pace == "hook":
-            # NO fade-in — first frame must be full brightness (Shorts feed shows frame 0)
-            # Zoom burst: start at 1.35x, pull back to 1.15x in first 0.4s = instant energy
-            sw, sh  = int(w * 1.35), int(h * 1.35)
-            burst   = 0.4
+            # No fade-in — first frame must be full brightness (Shorts feed shows frame 0)
             vf = (
                 f"fps=30,"
-                f"scale={sw}:{sh}:force_original_aspect_ratio=increase,"
-                f"crop={w}:{h}:"
-                f"x='(iw-ow)/2+((iw-ow)/4)*({pan_dir})*min(t/{max(0.1,duration*0.5):.3f},1)':"
-                f"y='(ih-oh)/2',"
+                f"scale={w}:{h}:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h},"
                 f"fade=t=out:st={max(0.1, duration - 0.2):.3f}:d=0.2"
             )
         elif pace == "reveal":
-            # Slow zoom-in during the scene + white flash out — signals a key moment
-            sw, sh = int(w * 1.18), int(h * 1.18)
+            # White flash out — signals a key moment
             vf = (
                 f"fps=30,"
-                f"scale={sw}:{sh}:force_original_aspect_ratio=increase,"
-                f"crop={w}:{h}:"
-                f"x='(iw-ow)/2':"
-                f"y='(ih-oh)/2-((ih-oh)/5)*min(t/{max(0.1, duration):.3f},1)',"
+                f"scale={w}:{h}:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h},"
                 f"fade=t=in:st=0:d={FADE_DUR},"
                 f"fade=t=out:st={max(0.1, duration - 0.2):.3f}:d=0.2:color=white"
             )
-        elif pace == "cta":
-            # Centered slow zoom, no pan — calm, focused close
-            sw, sh = int(w * 1.15), int(h * 1.15)
-            vf = (
-                f"fps=30,"
-                f"scale={sw}:{sh}:force_original_aspect_ratio=increase,"
-                f"crop={w}:{h}:"
-                f"x='(iw-ow)/2':"
-                f"y='(ih-oh)/2',"
-                f"fade=t=in:st=0:d={FADE_DUR},"
-                f"fade=t=out:st={max(0.1, duration - FADE_DUR):.3f}:d={FADE_DUR}"
-            )
         else:
-            # normal — steady Ken Burns pan, alternating direction
-            sw, sh = int(w * 1.12), int(h * 1.12)
+            # normal / cta — simple scale to fit, fade in/out
             vf = (
                 f"fps=30,"
-                f"scale={sw}:{sh}:force_original_aspect_ratio=increase,"
-                f"crop={w}:{h}:"
-                f"x='(iw-ow)/2+((iw-ow)/3)*({pan_dir})*min(t/{duration:.3f},1)':"
-                f"y='(ih-oh)/2',"
+                f"scale={w}:{h}:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h},"
                 f"fade=t=in:st=0:d={FADE_DUR},"
                 f"fade=t=out:st={max(0.1, duration - FADE_DUR):.3f}:d={FADE_DUR}"
             )
@@ -167,7 +142,10 @@ class VideoAssembler:
         list_file.write_text("\n".join(f"file '{p}'" for p in paths))
         _run([
             "ffmpeg", "-y", "-f", "concat", "-safe", "0",
-            "-i", str(list_file), "-c", "copy", str(out),
+            "-i", str(list_file),
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-c:a", "aac", "-b:a", "128k",
+            str(out),
         ])
         list_file.unlink(missing_ok=True)
 
