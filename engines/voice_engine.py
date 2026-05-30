@@ -30,8 +30,8 @@ ELEVENLABS_TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
 # Edge TTS fallback voices — male, consistent with NacArtha character
 EDGE_VOICES = {
     "en": ("en-US-BrianNeural",   "-3%"),
-    "hi": ("hi-IN-MadhurNeural",  "0%"),   # male, authoritative Hindi
-    "te": ("te-IN-MohanNeural",   "0%"),   # male, natural Telugu
+    "hi": ("hi-IN-MadhurNeural",  "+0%"),  # male, authoritative Hindi
+    "te": ("te-IN-MohanNeural",   "+0%"),  # male, natural Telugu
 }
 
 
