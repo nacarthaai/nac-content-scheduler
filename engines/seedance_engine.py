@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 SeedanceEngine v2 — Seedance 2.0 on Replicate.
 
