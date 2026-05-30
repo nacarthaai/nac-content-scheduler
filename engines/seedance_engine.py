@@ -82,21 +82,16 @@ class SeedanceEngine:
             inp = {
                 "prompt":           _build_prompt(visual_brief),
                 "aspect_ratio":     aspect,
-                "duration":         -1,      # intelligent duration — matches audio length
+                "duration":         5,
                 "resolution":       "720p",
                 "generate_audio":   False,   # we supply our own ElevenLabs audio
             }
 
-            # reference_images skipped — large face images trigger Replicate E005 filter
-            # Character identity held via prompt description instead
-
-            if audio_path and audio_path.exists():
-                audio_url = self._upload_audio(audio_path)
-                if audio_url:
-                    inp["reference_audios"] = [audio_url]
-                    log.info(f"  Seedance 2.0: lip sync enabled ({audio_path.name})")
-                else:
-                    log.warning("  Seedance 2.0: audio upload failed — generating without lip sync")
+            # reference_images + reference_audios skipped:
+            #   - reference_images (face photos) trigger Replicate E005 content filter
+            #   - reference_audios requires reference_images (E006 if omitted)
+            # Character identity held via detailed prompt. Lip sync not active.
+            pass
 
             headers = {
                 "Authorization": f"Bearer {self._key}",
