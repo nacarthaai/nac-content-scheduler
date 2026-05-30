@@ -87,8 +87,8 @@ class SeedanceEngine:
                 "generate_audio":   False,   # we supply our own ElevenLabs audio
             }
 
-            if self._ref_images:
-                inp["reference_images"] = self._ref_images
+            # reference_images skipped — large face images trigger Replicate E005 filter
+            # Character identity held via prompt description instead
 
             if audio_path and audio_path.exists():
                 audio_url = self._upload_audio(audio_path)
@@ -131,17 +131,12 @@ class SeedanceEngine:
         """Upload audio file to Replicate file storage, return URL."""
         try:
             with open(audio_path, "rb") as f:
-                data = f.read()
-            r = requests.post(
-                f"{REPLICATE_API}/files",
-                headers={
-                    "Authorization":       f"Bearer {self._key}",
-                    "Content-Type":        "audio/mpeg",
-                    "Content-Disposition": f'attachment; filename="{audio_path.name}"',
-                },
-                data=data,
-                timeout=60,
-            )
+                r = requests.post(
+                    f"{REPLICATE_API}/files",
+                    headers={"Authorization": f"Bearer {self._key}"},
+                    files={"content": (audio_path.name, f, "audio/mpeg")},
+                    timeout=60,
+                )
             if r.status_code in (200, 201):
                 info = r.json()
                 url = info.get("urls", {}).get("get") or info.get("url", "")
@@ -200,11 +195,10 @@ _ENVIRONMENT = (
 )
 
 _CHARACTER = (
-    "NacArtha: Indian male, 28-32, dark tailored jacket, white shirt, "
-    "thin-frame glasses, sharp jawline, calm confident expression. "
-    "Same face and outfit in every scene — strict identity lock."
+    "A young professional male trader in a dark tailored blazer and white shirt, "
+    "thin-frame glasses, calm focused expression, facing the camera."
 )
 
 
 def _build_prompt(visual_brief: str) -> str:
-    return f"{visual_brief}. {_CHARACTER}. {_ENVIRONMENT}. Photorealistic. No text overlays."
+    return f"{visual_brief}. {_CHARACTER}. {_ENVIRONMENT}. Cinematic. No text overlays."
