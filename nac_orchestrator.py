@@ -1,19 +1,14 @@
 """
-NacArtha Cinematic Pipeline v2
-
-Every clip is purpose-built using Seedance 2.0:
-  - reference_images: NacArtha character sheets → consistent photorealistic character
-  - reference_audios: ElevenLabs narration audio → automatic lip sync
+NacArtha Cinematic Pipeline v3
 
 Flow per language:
   1. Translate script
   2. Generate narration audio (ElevenLabs / Edge TTS fallback)
-  3. For each scene: Seedance 2.0 (character ref + audio) → lip-synced clip
-  4. FFmpeg assembles final video with HUD overlays + music
+  3. Per scene: HiggsField Soul (character image) → DoP (5s video clip)
+  4. FFmpeg assembles with text overlays + music
   5. Upload to YouTube
 
 No Ken Burns, no stock footage, no generic B-roll.
-Every visual matches exactly what Nac is saying.
 """
 import argparse
 import json
@@ -26,14 +21,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from engines.script_engine   import ScriptEngine
-from engines.topic_selector  import TopicSelector
-from engines.voice_engine    import VoiceEngine
-from engines.seedance_engine import SeedanceEngine
-from engines.video_assembler import VideoAssembler
-from engines.thumbnail_engine import ThumbnailEngine
-from engines.music_engine    import MusicEngine
-from engines.upload_engine   import UploadEngine
+from engines.script_engine     import ScriptEngine
+from engines.topic_selector    import TopicSelector
+from engines.voice_engine      import VoiceEngine
+from engines.higgsfield_engine import HiggsFieldEngine
+from engines.video_assembler   import VideoAssembler
+from engines.thumbnail_engine  import ThumbnailEngine
+from engines.music_engine      import MusicEngine
+from engines.upload_engine     import UploadEngine
 
 logging.basicConfig(
     level=logging.INFO,
@@ -70,7 +65,7 @@ def main(langs: list = None, on_lang_done=None):
     topic_selector  = TopicSelector()
     script_engine   = ScriptEngine()
     voice_engine    = VoiceEngine()
-    seedance        = SeedanceEngine()
+    higgsfield      = HiggsFieldEngine()
     assembler       = VideoAssembler()
     thumbnail_engine = ThumbnailEngine()
     music_engine    = MusicEngine()
@@ -122,10 +117,10 @@ def main(langs: list = None, on_lang_done=None):
             long_scenes  = _generate_audio(script["long_scenes"],  lang_dir / "audio" / "long",  voice_engine, lang)
             short_scenes = _generate_audio(script["short_scenes"], lang_dir / "audio" / "short", voice_engine, lang)
 
-            # ── 3b. Generate video clips with Seedance 2.0 (lip synced) ────
-            log.info(f"  [{lang}] Generating video clips with Seedance 2.0…")
-            clips_long  = _generate_clips(long_scenes,  lang_dir / "clips" / "long",  seedance, "landscape")
-            clips_short = _generate_clips(short_scenes, lang_dir / "clips" / "short", seedance, "portrait")
+            # ── 3b. Generate video clips with HiggsField ────────────────────
+            log.info(f"  [{lang}] Generating video clips with HiggsField…")
+            clips_long  = _generate_clips(long_scenes,  lang_dir / "clips" / "long",  higgsfield, "landscape")
+            clips_short = _generate_clips(short_scenes, lang_dir / "clips" / "short", higgsfield, "portrait")
 
             # Attach clip paths to scenes
             fallback = _black_clip(run_dir)
@@ -241,22 +236,21 @@ def _generate_audio(scenes: list, out_dir: Path, voice_engine: VoiceEngine, lang
     return result
 
 
-def _generate_clips(scenes: list, out_dir: Path, seedance: SeedanceEngine, orientation: str) -> dict:
-    """Generate one Seedance 2.0 clip per scene, with lip sync from narration audio."""
+def _generate_clips(scenes: list, out_dir: Path, engine: HiggsFieldEngine, orientation: str) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     clips = {}
     for scene in scenes:
-        sid        = scene["id"]
-        clip_path  = out_dir / f"scene_{sid:03d}.mp4"
-        visual     = scene.get("visual_prompt") or ", ".join(scene.get("visual_keywords", ["NacArtha trading room"]))
+        sid       = scene["id"]
+        clip_path = out_dir / f"scene_{sid:03d}.mp4"
+        visual    = scene.get("visual_prompt") or ", ".join(scene.get("visual_keywords", ["NacArtha trading room"]))
         audio_path = Path(scene.get("narration_path", "")) if scene.get("narration_path") else None
 
-        log.info(f"  Scene {sid} [{scene.get('pace','?')}] → Seedance 2.0")
-        result = seedance.generate(visual, clip_path, orientation, audio_path=audio_path)
+        log.info(f"  Scene {sid} [{scene.get('pace','?')}] → HiggsField")
+        result = engine.generate(visual, clip_path, orientation, audio_path=audio_path)
         if result:
             clips[sid] = result
         else:
-            log.warning(f"  Scene {sid}: Seedance failed — will use black fallback")
+            log.warning(f"  Scene {sid}: HiggsField failed — will use black fallback")
     return clips
 
 
