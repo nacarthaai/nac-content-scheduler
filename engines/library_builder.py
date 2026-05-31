@@ -33,31 +33,25 @@ INDEX_PATH   = LIBRARY_DIR / "library_index.json"
 # category: hook | confident | explain | reveal | cta | react | question | normal
 
 NAC_CLIPS = [
-    # Hook / Intro (8 clips)
+    # Hook (6 clips)
     {"id": "nac_hook_001", "category": "hook", "emotion": "confidence", "text": "Hey. Nac here. Welcome to my trading world."},
     {"id": "nac_hook_002", "category": "hook", "emotion": "excitement", "text": "The algorithm just made a decision you need to see."},
     {"id": "nac_hook_003", "category": "hook", "emotion": "tension",    "text": "Three signals. One trade. Let me show you exactly why."},
     {"id": "nac_hook_004", "category": "hook", "emotion": "confidence", "text": "I trade every day. Today was different."},
     {"id": "nac_hook_005", "category": "hook", "emotion": "excitement", "text": "The market moved. My algorithm was ready."},
-    {"id": "nac_hook_006", "category": "hook", "emotion": "insight",    "text": "This is what algorithmic trading looks like in real life."},
-    {"id": "nac_hook_007", "category": "hook", "emotion": "tension",    "text": "I want to show you something most traders never see."},
-    {"id": "nac_hook_008", "category": "hook", "emotion": "focus",      "text": "Today the bot caught something most humans would have missed."},
+    {"id": "nac_hook_006", "category": "hook", "emotion": "tension",    "text": "I want to show you something most traders never see."},
 
-    # Confident (12 clips)
+    # Confident (8 clips)
     {"id": "nac_conf_001", "category": "confident", "emotion": "confidence", "text": "Here is exactly what the data showed."},
     {"id": "nac_conf_002", "category": "confident", "emotion": "clarity",    "text": "The momentum score crossed seventy-five. That is the trigger."},
     {"id": "nac_conf_003", "category": "confident", "emotion": "focus",      "text": "Risk management blocked it. And that was the right call."},
     {"id": "nac_conf_004", "category": "confident", "emotion": "clarity",    "text": "The algorithm does not guess. It calculates."},
     {"id": "nac_conf_005", "category": "confident", "emotion": "confidence", "text": "Every trade has a reason. Let me show you this one."},
-    {"id": "nac_conf_006", "category": "confident", "emotion": "focus",      "text": "The exit was clean. Profit locked. Moving on."},
-    {"id": "nac_conf_007", "category": "confident", "emotion": "clarity",    "text": "Two out of three signals aligned. That is enough."},
-    {"id": "nac_conf_008", "category": "confident", "emotion": "confidence", "text": "The system held its position. Discipline matters more than greed."},
-    {"id": "nac_conf_009", "category": "confident", "emotion": "insight",    "text": "Win rate means nothing without proper risk sizing."},
-    {"id": "nac_conf_010", "category": "confident", "emotion": "clarity",    "text": "The algorithm does not panic. That is its greatest strength."},
-    {"id": "nac_conf_011", "category": "confident", "emotion": "focus",      "text": "Position size was reduced. The system protected capital first."},
-    {"id": "nac_conf_012", "category": "confident", "emotion": "confidence", "text": "Drawdown controlled. That is the real measure of any strategy."},
+    {"id": "nac_conf_006", "category": "confident", "emotion": "insight",    "text": "Win rate means nothing without proper risk sizing."},
+    {"id": "nac_conf_007", "category": "confident", "emotion": "focus",      "text": "Position size was reduced. The system protected capital first."},
+    {"id": "nac_conf_008", "category": "confident", "emotion": "confidence", "text": "Drawdown controlled. That is the real measure of any strategy."},
 
-    # Explain / Educational (15 clips)
+    # Explain (10 clips)
     {"id": "nac_exp_001",  "category": "explain", "emotion": "clarity",  "text": "Let me explain exactly how this works."},
     {"id": "nac_exp_002",  "category": "explain", "emotion": "focus",    "text": "The formula is simpler than you think. Watch."},
     {"id": "nac_exp_003",  "category": "explain", "emotion": "insight",  "text": "This is what most traders completely miss."},
@@ -65,44 +59,33 @@ NAC_CLIPS = [
     {"id": "nac_exp_005",  "category": "explain", "emotion": "insight",  "text": "A two percent maximum risk per trade. That is non-negotiable."},
     {"id": "nac_exp_006",  "category": "explain", "emotion": "clarity",  "text": "The momentum score is a composite of four indicators."},
     {"id": "nac_exp_007",  "category": "explain", "emotion": "focus",    "text": "When volume spikes before price, that is institutional activity."},
-    {"id": "nac_exp_008",  "category": "explain", "emotion": "insight",  "text": "EMA crossovers alone are not enough. Context is everything."},
-    {"id": "nac_exp_009",  "category": "explain", "emotion": "clarity",  "text": "The Sharpe ratio tells you how much risk you took for each unit of return."},
-    {"id": "nac_exp_010",  "category": "explain", "emotion": "focus",    "text": "Support and resistance are not lines. They are zones."},
-    {"id": "nac_exp_011",  "category": "explain", "emotion": "clarity",  "text": "A good stop loss is not just a number. It is a plan."},
-    {"id": "nac_exp_012",  "category": "explain", "emotion": "insight",  "text": "The algorithm checks sentiment before entering any trade."},
-    {"id": "nac_exp_013",  "category": "explain", "emotion": "focus",    "text": "Backtesting tells you what worked historically. Forward testing tells you what works now."},
-    {"id": "nac_exp_014",  "category": "explain", "emotion": "clarity",  "text": "Volatility is not the enemy. Unmanaged volatility is."},
-    {"id": "nac_exp_015",  "category": "explain", "emotion": "insight",  "text": "The difference between a signal and noise is probability."},
+    {"id": "nac_exp_008",  "category": "explain", "emotion": "insight",  "text": "Volatility is not the enemy. Unmanaged volatility is."},
+    {"id": "nac_exp_009",  "category": "explain", "emotion": "clarity",  "text": "A good stop loss is not just a number. It is a plan."},
+    {"id": "nac_exp_010",  "category": "explain", "emotion": "focus",    "text": "Backtesting tells you what worked. Forward testing tells you what works now."},
 
-    # Reveal / Key stat (8 clips)
+    # Reveal (6 clips)
     {"id": "nac_rev_001",  "category": "reveal", "emotion": "insight",    "text": "And that number? It changed everything."},
     {"id": "nac_rev_002",  "category": "reveal", "emotion": "tension",    "text": "This is the exact moment the system flagged the risk."},
     {"id": "nac_rev_003",  "category": "reveal", "emotion": "excitement", "text": "The signal was right. The timing was not. Here is why."},
     {"id": "nac_rev_004",  "category": "reveal", "emotion": "insight",    "text": "The P and L curve tells the whole story."},
-    {"id": "nac_rev_005",  "category": "reveal", "emotion": "tension",    "text": "Look at this candle. That single move changed the day's outcome."},
-    {"id": "nac_rev_006",  "category": "reveal", "emotion": "insight",    "text": "The equity curve does not lie."},
-    {"id": "nac_rev_007",  "category": "reveal", "emotion": "tension",    "text": "This is the exact moment risk management made the difference."},
-    {"id": "nac_rev_008",  "category": "reveal", "emotion": "excitement", "text": "Here is the trade log. Every entry, every exit, every decision."},
+    {"id": "nac_rev_005",  "category": "reveal", "emotion": "insight",    "text": "The equity curve does not lie."},
+    {"id": "nac_rev_006",  "category": "reveal", "emotion": "tension",    "text": "This is the exact moment risk management made the difference."},
 
-    # React / News (8 clips)
+    # React (6 clips)
     {"id": "nac_react_001", "category": "react", "emotion": "focus",    "text": "When news like this hits, the algorithm responds in seconds."},
     {"id": "nac_react_002", "category": "react", "emotion": "clarity",  "text": "This changes the momentum landscape completely."},
     {"id": "nac_react_003", "category": "react", "emotion": "tension",  "text": "Most algo systems would have missed this. Mine did not."},
     {"id": "nac_react_004", "category": "react", "emotion": "focus",    "text": "The Fed announcement hit. The bot was already positioned."},
     {"id": "nac_react_005", "category": "react", "emotion": "insight",  "text": "Earnings beat. The algorithm caught the pre-market signal."},
-    {"id": "nac_react_006", "category": "react", "emotion": "clarity",  "text": "Volatility spiked. The system reduced exposure automatically."},
-    {"id": "nac_react_007", "category": "react", "emotion": "tension",  "text": "Market opened gap down. The bot skipped three signals. That was correct."},
-    {"id": "nac_react_008", "category": "react", "emotion": "focus",    "text": "News broke at market open. The algorithm's reaction was instant."},
+    {"id": "nac_react_006", "category": "react", "emotion": "tension",  "text": "Market opened gap down. The bot skipped three signals. That was correct."},
 
-    # CTA / Outro (6 clips)
+    # CTA (4 clips)
     {"id": "nac_cta_001",  "category": "cta", "emotion": "confidence", "text": "Subscribe to NacArtha. I trade every day. You should know what I know. Follow the algorithm. See you tomorrow."},
     {"id": "nac_cta_002",  "category": "cta", "emotion": "confidence", "text": "Follow NacArtha. The algorithm runs twenty-four seven. So should your knowledge."},
     {"id": "nac_cta_003",  "category": "cta", "emotion": "confidence", "text": "That is all for today. Follow NacArtha for the next trade."},
     {"id": "nac_cta_004",  "category": "cta", "emotion": "excitement", "text": "The algorithm runs every market day. Be here when it matters."},
-    {"id": "nac_cta_005",  "category": "cta", "emotion": "confidence", "text": "If you learned something today, subscribe. More trades tomorrow."},
-    {"id": "nac_cta_006",  "category": "cta", "emotion": "clarity",    "text": "Follow the data. Follow NacArtha. See you in the next video."},
 
-    # Normal / Transition (13 clips)
+    # Normal (10 clips)
     {"id": "nac_norm_001", "category": "normal", "emotion": "clarity",  "text": "Here is what happened next."},
     {"id": "nac_norm_002", "category": "normal", "emotion": "focus",    "text": "Let me pull up the chart."},
     {"id": "nac_norm_003", "category": "normal", "emotion": "insight",  "text": "The pattern was clear in hindsight."},
@@ -112,14 +95,11 @@ NAC_CLIPS = [
     {"id": "nac_norm_007", "category": "normal", "emotion": "insight",  "text": "The data makes it clear."},
     {"id": "nac_norm_008", "category": "normal", "emotion": "clarity",  "text": "One more thing before we wrap up."},
     {"id": "nac_norm_009", "category": "normal", "emotion": "focus",    "text": "Let me break this down step by step."},
-    {"id": "nac_norm_010", "category": "normal", "emotion": "clarity",  "text": "Here is the number that matters."},
-    {"id": "nac_norm_011", "category": "normal", "emotion": "insight",  "text": "This is where most people get it wrong."},
-    {"id": "nac_norm_012", "category": "normal", "emotion": "focus",    "text": "Keep this in mind as we go through the chart."},
-    {"id": "nac_norm_013", "category": "normal", "emotion": "clarity",  "text": "The setup was there. Here is what the bot saw."},
+    {"id": "nac_norm_010", "category": "normal", "emotion": "clarity",  "text": "The setup was there. Here is what the bot saw."},
 ]
 
 STUDENT_CLIPS = [
-    # Questions (20 clips)
+    # Questions (12 clips)
     {"id": "stu_q_001",  "category": "question", "emotion": "curiosity", "text": "But why did the bot skip that trade?"},
     {"id": "stu_q_002",  "category": "question", "emotion": "curiosity", "text": "What does the RSI number actually mean?"},
     {"id": "stu_q_003",  "category": "question", "emotion": "curiosity", "text": "How does the algorithm decide when to sell?"},
@@ -128,35 +108,20 @@ STUDENT_CLIPS = [
     {"id": "stu_q_006",  "category": "question", "emotion": "curiosity", "text": "How is this different from regular technical analysis?"},
     {"id": "stu_q_007",  "category": "question", "emotion": "curiosity", "text": "So the bot never second-guesses itself?"},
     {"id": "stu_q_008",  "category": "question", "emotion": "curiosity", "text": "What happens when two signals contradict each other?"},
-    {"id": "stu_q_009",  "category": "question", "emotion": "curiosity", "text": "Does the algorithm ever make mistakes?"},
-    {"id": "stu_q_010",  "category": "question", "emotion": "curiosity", "text": "How long did it take to build this system?"},
-    {"id": "stu_q_011",  "category": "question", "emotion": "curiosity", "text": "Is this strategy only for stocks or can it work on crypto too?"},
-    {"id": "stu_q_012",  "category": "question", "emotion": "curiosity", "text": "What is the minimum capital needed to run this bot?"},
-    {"id": "stu_q_013",  "category": "question", "emotion": "curiosity", "text": "Can the algorithm trade in any market condition?"},
-    {"id": "stu_q_014",  "category": "question", "emotion": "curiosity", "text": "How do you know when a signal is strong enough to act on?"},
-    {"id": "stu_q_015",  "category": "question", "emotion": "curiosity", "text": "What is the difference between a momentum trade and a breakout trade?"},
-    {"id": "stu_q_016",  "category": "question", "emotion": "curiosity", "text": "Does the bot ever hold positions overnight?"},
-    {"id": "stu_q_017",  "category": "question", "emotion": "curiosity", "text": "How does news affect the algorithm's decisions?"},
-    {"id": "stu_q_018",  "category": "question", "emotion": "curiosity", "text": "Can retail traders replicate this kind of system?"},
-    {"id": "stu_q_019",  "category": "question", "emotion": "curiosity", "text": "Why do most algo traders fail?"},
-    {"id": "stu_q_020",  "category": "question", "emotion": "curiosity", "text": "What is the bot's average holding time per trade?"},
+    {"id": "stu_q_009",  "category": "question", "emotion": "curiosity", "text": "Does the bot ever hold positions overnight?"},
+    {"id": "stu_q_010",  "category": "question", "emotion": "curiosity", "text": "How does news affect the algorithm's decisions?"},
+    {"id": "stu_q_011",  "category": "question", "emotion": "curiosity", "text": "Can retail traders replicate this kind of system?"},
+    {"id": "stu_q_012",  "category": "question", "emotion": "curiosity", "text": "Why do most algo traders fail?"},
 
-    # Reactions / Normal (15 clips)
+    # Reactions (8 clips)
     {"id": "stu_react_001", "category": "normal", "emotion": "focus",      "text": "Okay. That makes sense now."},
     {"id": "stu_react_002", "category": "normal", "emotion": "excitement", "text": "So the system knew before the price moved?"},
     {"id": "stu_react_003", "category": "normal", "emotion": "insight",    "text": "I never thought about it that way."},
     {"id": "stu_react_004", "category": "normal", "emotion": "clarity",    "text": "That is actually simpler than I expected."},
     {"id": "stu_react_005", "category": "normal", "emotion": "insight",    "text": "So consistency matters more than any single trade."},
-    {"id": "stu_react_006", "category": "normal", "emotion": "focus",      "text": "The math behind this is fascinating."},
-    {"id": "stu_react_007", "category": "normal", "emotion": "excitement", "text": "I had no idea algorithms worked at this speed."},
-    {"id": "stu_react_008", "category": "normal", "emotion": "insight",    "text": "That changes how I think about stop losses completely."},
-    {"id": "stu_react_009", "category": "normal", "emotion": "clarity",    "text": "So the bot basically never lets emotions interfere."},
-    {"id": "stu_react_010", "category": "normal", "emotion": "excitement", "text": "That is a very different approach from what I was taught."},
-    {"id": "stu_react_011", "category": "normal", "emotion": "insight",    "text": "So discipline is built directly into the code itself."},
-    {"id": "stu_react_012", "category": "normal", "emotion": "focus",      "text": "This makes traditional investing look completely different."},
-    {"id": "stu_react_013", "category": "normal", "emotion": "clarity",    "text": "I want to understand the risk management piece better."},
-    {"id": "stu_react_014", "category": "normal", "emotion": "excitement", "text": "The compounding effect here is incredible."},
-    {"id": "stu_react_015", "category": "normal", "emotion": "insight",    "text": "So every loss is a calculated decision, not a failure."},
+    {"id": "stu_react_006", "category": "normal", "emotion": "excitement", "text": "I had no idea algorithms worked at this speed."},
+    {"id": "stu_react_007", "category": "normal", "emotion": "insight",    "text": "So discipline is built directly into the code itself."},
+    {"id": "stu_react_008", "category": "normal", "emotion": "insight",    "text": "So every loss is a calculated decision, not a failure."},
 ]
 
 # ── Veo background clip definitions ──────────────────────────────────────────
