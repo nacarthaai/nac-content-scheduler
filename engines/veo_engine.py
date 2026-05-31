@@ -68,7 +68,6 @@ class VeoEngine:
                     duration_seconds=duration,
                     number_of_videos=1,
                     enhance_prompt=True,
-                    generate_audio=False,  # silent clips — avoids 33-40% audio surcharge
                 ),
             )
 
