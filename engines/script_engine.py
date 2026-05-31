@@ -29,15 +29,13 @@ _JSON_SCHEMA = """
     {{
       "id": 1,
       "narration": "3-5 sentences, 25-35 words",
-      "visual_prompt": "Full cinematic AI video generation prompt — see VISUAL PROMPT RULES below",
+      "visual_prompt": "Illustrated scene composition — see VISUAL PROMPT RULES below",
+      "scene_type": "nac_face",
+      "chart_key": null,
       "emotion": "clarity",
       "pace": "hook",
-      "is_hero_shot": false,
       "text_overlay": "key stat or concept ≤6 words or null"
     }}
-  ],
-  "short_scenes": [
-    {{ "same schema, 3 scenes only" }}
   ]
 }}"""
 
@@ -62,155 +60,92 @@ Same warm/cool lighting setup. Never appears in bot/news/recap episodes.
 
 _RULES = """
 SCENE COUNT AND LENGTH:
-- long_scenes: exactly 10 scenes. Total narration 290-320 words.
-- short_scenes: exactly 3 scenes. Total narration 70-90 words.
+- long_scenes: exactly 10 scenes. Total narration 290-320 words (5-6 minutes at natural pace).
+- NO short_scenes — Shorts are automatically cut from the first 60 seconds of the long video.
 - emotion: one of clarity | curiosity | confidence | focus | excitement | insight | tension
 - pace: one of hook | normal | reveal | cta
 
 PACE RULES:
-  hook   → scene 1 ALWAYS. Opens with mandatory intro phrase then immediate hook content.
-  reveal → drop a key number, answer a planted open loop, or land a surprising fact.
-           Use 2-4× per long video, 1× per short.
-  cta    → last scene ALWAYS. Subscribe outro — word-for-word (see OUTRO RULE).
+  hook   → scene 1 ALWAYS.
+  reveal → drop a key number, answer a planted open loop, or land a surprising fact. Use 2-4× per video.
+  cta    → last scene ALWAYS.
   normal → everything else.
 
-INTRO RULE (scene 1, pace: hook) — MANDATORY for every episode:
-  Long video narration MUST open word-for-word with:
-    "Hey. Nac here. Welcome to my trading world."
-  Then pivot immediately to the single most tension-filled stat or moment — no warmup.
-  Example: "Hey. Nac here. Welcome to my trading world. Three trades. One I killed myself. Here's why."
+SCENE TYPE RULES — MANDATORY distribution across 10 scenes:
+  scene_type must be one of: "nac_face" | "illustrated" | "chart"
 
-  Short video: "Hey. NacArtha." then the hook stat in the same breath.
-  Example: "Hey. NacArtha. The bot just refused $1,200 in profit. On purpose."
+  nac_face (3-5 scenes): Illustrated portrait/half-body of Nac in trading room.
+    → ALWAYS scene 1 (hook) and scene 10 (cta).
+    → 1-3 more scenes at key emotional moments (hero shot, reveal reaction, etc.)
 
-OUTRO RULE (last scene, pace: cta) — MANDATORY word-for-word:
-  Long: "Subscribe to NacArtha. I trade every day — you should know what I know. Follow the algorithm. See you tomorrow."
-  Short: "Subscribe to NacArtha. Daily trades, live. Don't miss tomorrow."
+  chart (2-3 scenes): Real trading chart appears on screen. Use at data-heavy moments.
+    → chart_key must be one of: "pnl" | "equity" | "positions" | "trades"
+    → pnl = today's P&L over time, equity = equity curve, positions = open positions, trades = today's trade list
+    → visual_prompt describes the illustrated background (trading room, dark, terminal glow)
+    → chart_key: null for all non-chart scenes
 
-OPEN LOOPS: Plant a specific question in scenes 2-4. Resolve it as a reveal scene.
+  illustrated (3-5 scenes): Cinematic environment or action scene — no Nac character needed.
+    → Markets, trading terminals, city skyline, data flows, abstract financial imagery
+
+INTRO RULE (scene 1, pace: hook, scene_type: nac_face) — MANDATORY:
+  Narration MUST open word-for-word: "Hey. Nac here. Welcome to my trading world."
+  Then pivot to the single most tension-filled stat or moment — no warmup.
+
+OUTRO RULE (scene 10, pace: cta, scene_type: nac_face) — MANDATORY word-for-word:
+  "Subscribe to NacArtha. I trade every day — you should know what I know. Follow the algorithm. See you tomorrow."
+
+OPEN LOOPS: Plant a specific question in scenes 2-4. Resolve it in a reveal scene.
   Plant: "I'll show you the exact number that would have stopped me — it's not what you think."
   Resolve: "That number? Negative two-point-four percent. And I had a hard stop at two."
-  This is the #1 retention mechanism. Every episode needs one.
 
 SENTENCE RHYTHM: Punch short sentences against long ones. Never 3 same-length in a row.
   Good: "Three signals fired. Only one qualified. The other two? Risk management killed them."
   Bad:  "The algorithm scanned multiple stocks. It found several signals today. Many were rejected."
 
-Mark exactly 1 long_scene and 1 short_scene as is_hero_shot: true.
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-VISUAL PROMPT RULES — CINEMATIC FORMAT
+VISUAL PROMPT RULES — ILLUSTRATED STILL IMAGE FORMAT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Write every visual_prompt as a full AI video generation brief with precise timing.
-Structure EVERY prompt exactly like this:
+These prompts generate ILLUSTRATED STILL IMAGES (Operation Khamoshi style), not video.
+Write compositional descriptions — what is IN the frame, not what moves.
+Camera movement (Ken Burns) is added automatically. Do NOT describe motion.
 
-[Shot type]. [Camera movement]. [Stability/style — e.g. "smooth dolly" or "slight handheld micro-jitter"].
-Audio: [ambient only — keyboard, terminal hum, chair, breathing, paper — NO music unless scene specifies].
-Lighting: [exact setup — "warm gold key left + cool blue terminal fill" or specific variation].
+Format: [Framing/shot size]. [Subject and pose/action]. [Key visual elements]. [Lighting mood].
 
-[NACARTHA CHARACTER or STUDENT CHARACTER block — use _CHARACTER_LOCK exactly]
+━━ nac_face scene visual_prompt format ━━
+"[Shot size: close-up / half-body / portrait]. Nac [expression and pose].
+[What he's doing — looking at screen, arms crossed, leaning forward, etc.].
+[Specific background detail — terminals glowing, city visible, etc.].
+[Lighting note — gold from left, blue terminal fill, etc.]."
 
-ACTION:
-0-2s: [exact action — what moves, what body part, what object, what micro-detail]
-2-5s: [exact action — camera move + character action together]
-5-8s: [exact action + optional micro slow-motion: "Micro slow-motion 0.3s at [moment]. Back to real-time."]
-[continue until full scene duration]
+Examples:
+  "Half-body portrait. Nac stands with arms crossed, looking directly at camera, slight smirk.
+  Three Bloomberg terminals glow gold and blue behind him. City skyline visible through glass. Warm gold key light."
 
-Camera: [shot size progression, e.g. "ECU → medium close" or "locked-off medium"]
+  "Close-up portrait. Nac leans forward, eyes intense, index finger pointing toward viewer.
+  Terminal data reflected in his glasses. Electric blue dominant light, warm gold accent."
 
-━━ SCENE 1 (pace: hook) VISUAL — MANDATORY TEMPLATE ━━
-Use this EXACT intro visual for ALL episode types — do not deviate:
+━━ illustrated scene visual_prompt format ━━
+"[Scene description — what environment, what action, what mood].
+[Specific visual elements to include]. [Lighting and color palette]."
 
-"Single continuous shot, no cuts. Smooth cinematic dolly push-in.
-Audio: mechanical keyboard click at 2s, terminal hum throughout, distant fan hum, chair movement. No music.
-Lighting: dark trading office. Warm gold key light from left. Cool electric blue from terminals.
-Holographic NAC logo pulses gently right of frame.
+Examples:
+  "Wide shot of Bloomberg terminal array, cascading gold and blue market data, empty trading chair,
+  city lights glowing through floor-to-ceiling glass behind. Dark, cinematic, electric blue dominant."
 
-NACARTHA CHARACTER (STRICT IDENTITY LOCK): [description]
+  "Extreme close-up of trading screen showing red and green candlestick chart, cursor hovering
+  over a specific number. Warm gold reflection on glass. Dark background. Dramatic lighting."
 
-ACTION:
-0-1s: NacArtha stands center frame, back to camera. Dark trading office. Three Bloomberg terminals
-glow gold and blue behind him. Holographic NAC logo pulses right.
-1-2s: Slow turn toward lens. Direct eye contact. Slight confident smirk. Glasses catch terminal glow.
-2-3s: Speaks directly to camera. Mouth moves. Narration begins.
-3-5s: Turns. Walks to glass desk. Sits in one smooth motion. Opens matte-black laptop.
-5-7s: NacArtha logo pulses gold on laptop screen. Blue holographic glow reflects off his glasses.
-Leans forward slightly toward screen.
-7-10s: Camera begins slow push-in toward laptop screen. Logo dissolves. Live trading dashboard
-appears — green/red candles, P&L counter, bot activity feed scrolling.
-Micro slow-motion 0.4s as dashboard fills frame. Back to real-time.
-Camera: slow push-in throughout. Frame shifts from wide to ECU on laptop screen."
+━━ chart scene visual_prompt format ━━
+"Dark trading command center background, terminal screens dimmed, empty space in lower frame
+for chart display. [Mood — tense / revealing / analytical]. Electric blue and gold ambient glow."
+(The actual chart image will be overlaid by the video assembler — just describe the background.)
 
-━━ LAST SCENE (pace: cta) VISUAL — MANDATORY TEMPLATE ━━
-"Single continuous shot, locked-off. Medium close-up.
-Audio: terminal hum fades slowly to near-silence. Single keyboard click at 3s.
-Lighting: warm gold accent from left intensifies. Blue terminal glow softens behind him.
-
-NACARTHA CHARACTER (STRICT IDENTITY LOCK): [description]
-
-ACTION:
-0-2s: NacArtha faces camera directly. Sits back slightly. Unhurried expression.
-2-3s: Leans forward slowly. Points one finger toward camera. Glasses catch gold light.
-3-6s: Direct eye contact. Speaks the outro. Micro slow-motion 0.2s on the word 'algorithm'.
-6-8s: Sits back. Slight nod. Confident close.
-8-10s: Bloomberg terminals pulse once brighter behind him. NAC logo glows. Subscribe text appears.
-Camera: locked-off medium close-up. Never moves."
-
-━━ NORMAL SCENE (pace: normal) VISUAL FORMAT ━━
-"Single continuous shot, [one cut / no cuts]. [Smooth cinematic / slight handheld].
-Audio: [specific ambient sounds — keyboard, terminal hum, chair movement, paper flip, breathing].
-Lighting: warm gold key left + cool blue terminal fill. [Any variation].
-
-NACARTHA CHARACTER (STRICT IDENTITY LOCK): [description]
-
-ACTION:
-0-2s: [precise action]
-2-5s: [precise action + camera movement]
-5-8s: [precise action. Optional: Micro slow-motion 0.3s at [specific moment]. Back to real-time.]
-[continue]
-Camera: [exact shot progression]"
-
-━━ REVEAL SCENE (pace: reveal) VISUAL FORMAT ━━
-"Single continuous shot, no cuts. Smooth push-in to ECU.
-Audio: single keyboard click at impact moment. Terminal hum. Near-silence.
-Lighting: cool blue dominant from terminal. Warm gold fades to near-black.
-
-NACARTHA CHARACTER (STRICT IDENTITY LOCK): [description]
-
-ACTION:
-0-2s: Extreme close-up. Bloomberg terminal screen. Cursor blinks on [specific number/text].
-Micro slow-motion 0.5s on the number. Back to real-time.
-2-4s: Cut to NacArtha's face. Expressionless. Eyes scanning screen. Terminal glow on glasses.
-4-5s: Slow zoom out. His index finger touches screen at the key data point.
-Camera: ECU → medium close. Dolly out."
-
-━━ EDUCATIONAL SCENE with STUDENT (educational episodes only) ━━
-"Single continuous shot, one smooth cut. Cinematic.
-Audio: marker on glass whiteboard, notebook pen, A/C hum, ambient classroom. No music.
-Lighting: warm focused overhead on table. Cool blue accent from wall-mounted screen.
-NacArtha lit gold from left. Student lit softer from above.
-
-NACARTHA CHARACTER (STRICT IDENTITY LOCK): [description]
-STUDENT CHARACTER (STRICT IDENTITY LOCK): [description]
-
-ACTION:
-0-2s: Student leans forward across glass table. Notebook open. Pen tapping paper.
-Asks question — mouth visible, slight frown of concentration.
-2-3s: Cut to NacArtha. Slight pause. Nods once. Stands. Moves to glass whiteboard.
-3-7s: Writes formula/concept with marker. Speaks while writing. Letters appear clearly.
-7-9s: NacArtha turns to camera — not to student. Addresses viewer directly.
-Whiteboard formula visible in background. Student visible in foreground, taking notes.
-Micro slow-motion 0.2s as NacArtha turns to camera.
-9-10s: Pull back to wide — both characters visible. Whiteboard fills right side of frame.
-Camera: medium on student → medium on NacArtha → wide establishing."
-
-ADDITIONAL VISUAL RULES:
-- Every scene must show a DIFFERENT angle, action, or setting than the previous
-- Do NOT put narration text in visual_prompt — describe only what is SEEN
-- Every reveal scene MUST show a specific number on a terminal (use a plausible value)
-- Micro slow-motion is allowed only at high-tension moments — max 0.5s, then back to real-time
-- short_scenes use the same scene 1 intro template (condensed) and CTA template
+ADDITIONAL RULES:
+- Every scene must have a DIFFERENT composition from the previous
+- Do NOT include text, numbers, or logos in visual_prompt — those are handled separately
+- Reveal scenes (pace: reveal): Nac's expression should show controlled intensity
+- Keep prompts under 80 words
 """
 
 # ── Shared NacArtha persona ────────────────────────────────────────────────────

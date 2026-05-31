@@ -1,15 +1,17 @@
 """
-NacArtha Cinematic Pipeline v3
+NacArtha Cinematic Pipeline v5
 
-Flow per language:
-  1. Translate script
-  2. Generate narration audio (ElevenLabs / Edge TTS fallback)
-  3. Per scene: HiggsField Soul (character image) → DoP (5s video clip)
-  4. FFmpeg assembles with text overlays + music
-  5. Upload to YouTube
+Three video types, each with different asset sources:
 
-No Ken Burns, no stock footage, no generic B-roll.
+  bot_performance → HeyGen Nac clips + yfinance/trading system charts + Veo trading backgrounds
+  educational     → HeyGen Nac + student clips + yfinance example charts + Veo classroom backgrounds
+  news            → HeyGen Nac clips + real news images (NewsAPI) + yfinance market impact charts
+
+Shorts: cut from first 60s of long video (portrait 1080×1920).
+Same clips used across EN/HI/TE — only audio differs per language.
 """
+from __future__ import annotations
+
 import argparse
 import json
 import logging
@@ -21,14 +23,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from engines.script_engine     import ScriptEngine
-from engines.topic_selector    import TopicSelector
-from engines.voice_engine      import VoiceEngine
-from engines.higgsfield_engine import HiggsFieldEngine
-from engines.video_assembler   import VideoAssembler
-from engines.thumbnail_engine  import ThumbnailEngine
-from engines.music_engine      import MusicEngine
-from engines.upload_engine     import UploadEngine
+from engines.script_engine    import ScriptEngine
+from engines.topic_selector   import TopicSelector
+from engines.voice_engine     import VoiceEngine
+from engines.video_assembler  import VideoAssembler
+from engines.thumbnail_engine import ThumbnailEngine
+from engines.music_engine     import MusicEngine
+from engines.upload_engine    import UploadEngine
+from engines.library_engine   import LibraryEngine
+from engines.chart_engine     import ChartEngine
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,9 +51,9 @@ def main(langs: list = None, on_lang_done=None):
         pass
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--topic",      default="", help="Topic ID (blank = auto-select)")
-    parser.add_argument("--topic-type", default="", help="Force type: bot | news | evergreen")
-    parser.add_argument("--lang",       default="all", help="en | hi | te | all")
+    parser.add_argument("--topic",      default="")
+    parser.add_argument("--topic-type", default="")
+    parser.add_argument("--lang",       default="all")
     args = parser.parse_args()
 
     if langs is None:
@@ -60,16 +63,17 @@ def main(langs: list = None, on_lang_done=None):
     run_dir = OUTPUT_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    log.info(f"=== NacArtha Pipeline  run={run_id}  langs={langs}  topic={args.topic or 'auto'} ===")
+    log.info(f"=== NacArtha Pipeline  run={run_id}  langs={langs} ===")
 
-    topic_selector  = TopicSelector()
-    script_engine   = ScriptEngine()
-    voice_engine    = VoiceEngine()
-    higgsfield      = HiggsFieldEngine()
-    assembler       = VideoAssembler()
+    topic_selector   = TopicSelector()
+    script_engine    = ScriptEngine()
+    voice_engine     = VoiceEngine()
+    assembler        = VideoAssembler()
     thumbnail_engine = ThumbnailEngine()
-    music_engine    = MusicEngine()
-    uploader        = UploadEngine(
+    music_engine     = MusicEngine()
+    library          = LibraryEngine()
+    charts           = ChartEngine()
+    uploader         = UploadEngine(
         client_id=os.environ.get("YOUTUBE_CLIENT_ID", ""),
         client_secret=os.environ.get("YOUTUBE_CLIENT_SECRET", ""),
         refresh_tokens={
@@ -79,7 +83,7 @@ def main(langs: list = None, on_lang_done=None):
         },
     )
 
-    # ── 1. Select topic + generate EN master script ──────────────────────────
+    # ── 1. Topic + script ────────────────────────────────────────────────────
     if args.topic:
         from engines.topic_selector import BOT_BRAND_TOPICS, EDUCATIONAL_TOPICS
         all_topics = BOT_BRAND_TOPICS + EDUCATIONAL_TOPICS
@@ -89,20 +93,28 @@ def main(langs: list = None, on_lang_done=None):
     else:
         topic = topic_selector.select(force_type=getattr(args, "topic_type", ""))
 
-    log.info(f"Generating EN master script [{topic.get('type','?')}]: {topic.get('title','')}")
+    video_type = topic.get("type", "bot")
+    log.info(f"Topic [{video_type}]: {topic.get('title', '')}")
+
     en_script = script_engine.generate_en(topic=topic)
     (run_dir / "script_en.json").write_text(json.dumps(en_script, ensure_ascii=False, indent=2))
 
-    # ── 2. Select music ──────────────────────────────────────────────────────
-    music_path = music_engine.select(en_script.get("topic_id", ""), en_script.get("topic_type", ""))
+    # ── 2. Music ─────────────────────────────────────────────────────────────
+    music_path = music_engine.select(en_script.get("topic_id", ""), video_type)
     log.info(f"Music: {music_path.name if music_path else 'none'}")
 
-    # ── 3. Per-language pipeline ─────────────────────────────────────────────
-    # Each language gets its own clips because lip sync is per audio track.
+    # ── 3. Build scene visuals (shared across all languages) ─────────────────
+    log.info(f"Building visuals for type={video_type}…")
+    scene_visuals = _build_visuals(
+        en_script["long_scenes"], run_dir, video_type,
+        library, charts, topic,
+    )
+
+    # ── 4. Per-language pipeline ──────────────────────────────────────────────
     results = {}
 
     for lang in langs:
-        log.info(f"\n{'='*55}\n  [{lang.upper()}] Channel Pipeline\n{'='*55}")
+        log.info(f"\n{'='*55}\n  [{lang.upper()}] Pipeline\n{'='*55}")
         lang_dir = run_dir / lang
         lang_dir.mkdir(exist_ok=True)
 
@@ -112,54 +124,38 @@ def main(langs: list = None, on_lang_done=None):
                 json.dumps(script, ensure_ascii=False, indent=2)
             )
 
-            # ── 3a. Generate narration audio FIRST (needed for lip sync) ────
-            log.info(f"  [{lang}] Generating narration audio…")
-            long_scenes  = _generate_audio(script["long_scenes"],  lang_dir / "audio" / "long",  voice_engine, lang)
-            short_scenes = _generate_audio(script["short_scenes"], lang_dir / "audio" / "short", voice_engine, lang)
+            # Generate audio per language
+            log.info(f"  [{lang}] Generating audio…")
+            scenes = _generate_audio(script["long_scenes"], lang_dir / "audio", voice_engine, lang)
 
-            # ── 3b. Generate video clips with HiggsField ────────────────────
-            log.info(f"  [{lang}] Generating video clips with HiggsField…")
-            clips_long  = _generate_clips(long_scenes,  lang_dir / "clips" / "long",  higgsfield, "landscape")
-            clips_short = _generate_clips(short_scenes, lang_dir / "clips" / "short", higgsfield, "portrait")
+            # Attach visuals (image/video path + chart path)
+            en_overlays = {s["id"]: s.get("text_overlay") for s in en_script["long_scenes"]}
+            for s in scenes:
+                v = scene_visuals.get(s["id"], {})
+                s["image_path"]  = v.get("image_path", str(_black_image(run_dir)))
+                s["chart_path"]  = v.get("chart_path")
+                s["text_overlay"] = en_overlays.get(s["id"])  # English only
 
-            # Attach clip paths to scenes
-            fallback = _black_clip(run_dir)
-            for s in long_scenes:
-                s["video_path"] = str(clips_long.get(s["id"], fallback))
-            for s in short_scenes:
-                s["video_path"] = str(clips_short.get(s["id"], fallback))
-
-            # Text overlays always in English (translated glyphs don't render on Railway)
-            en_long_overlays  = {s["id"]: s.get("text_overlay") for s in en_script["long_scenes"]}
-            en_short_overlays = {s["id"]: s.get("text_overlay") for s in en_script["short_scenes"]}
-            for s in long_scenes:
-                s["text_overlay"] = en_long_overlays.get(s["id"])
-            for s in short_scenes:
-                s["text_overlay"] = en_short_overlays.get(s["id"])
-
-            # ── 3c. Assemble ────────────────────────────────────────────────
+            # Assemble long video
             long_path  = lang_dir / "long.mp4"
             short_path = lang_dir / "short.mp4"
 
             log.info(f"  [{lang}] Assembling long video…")
             assembler.assemble(
-                long_scenes, long_path, "landscape", music_path,
+                scenes, long_path, "landscape", music_path,
                 hook_text=en_script.get("hook_text", ""),
                 cta_text=en_script.get("cta_text", ""),
             )
 
-            log.info(f"  [{lang}] Assembling short video…")
-            assembler.assemble(
-                short_scenes, short_path, "portrait", music_path,
-                hook_text=en_script.get("hook_text", ""),
-                cta_text=en_script.get("cta_text", ""),
-            )
+            # Cut short from long video
+            log.info(f"  [{lang}] Cutting Short…")
+            assembler.cut_short(long_path, short_path)
 
-            # ── 3d. Thumbnail ────────────────────────────────────────────────
+            # Thumbnail
             thumb_path = lang_dir / "thumbnail.jpg"
             thumbnail_engine.generate(en_script["title"], lang, thumb_path)
 
-            # ── 3e. Upload ───────────────────────────────────────────────────
+            # Upload
             refresh_token = uploader.refresh_tokens.get(lang, "")
             if not refresh_token:
                 log.warning(f"  [{lang}] No refresh token — skipping upload")
@@ -173,7 +169,7 @@ def main(langs: list = None, on_lang_done=None):
                 + "\n\nMusic: Kevin MacLeod (incompetech.com) — Licensed under Creative Commons: By Attribution 3.0"
             )
 
-            log.info(f"  [{lang}] Uploading long video…")
+            log.info(f"  [{lang}] Uploading…")
             long_urls = uploader.upload_all_languages(
                 video_path=long_path,
                 thumbnail_path=thumb_path,
@@ -183,8 +179,6 @@ def main(langs: list = None, on_lang_done=None):
                     "tags":        script.get("tags", []),
                 }},
             )
-
-            log.info(f"  [{lang}] Uploading short video…")
             short_urls = uploader.upload_all_languages(
                 video_path=short_path,
                 thumbnail_path=None,
@@ -203,25 +197,141 @@ def main(langs: list = None, on_lang_done=None):
             }
             if on_lang_done:
                 on_lang_done(lang)
-            log.info(f"  [{lang}] Done. Long: {results[lang]['long_url']} | Short: {results[lang]['short_url']}")
+            log.info(f"  [{lang}] ✓ Long: {results[lang]['long_url']} | Short: {results[lang]['short_url']}")
 
-        except Exception as ch_err:
-            log.error(f"[{lang.upper()}] CHANNEL FAILED: {ch_err}", exc_info=True)
-            results[lang] = {"status": "error", "error": str(ch_err)}
+        except Exception as e:
+            log.error(f"[{lang.upper()}] FAILED: {e}", exc_info=True)
+            results[lang] = {"status": "error", "error": str(e)}
 
-    # ── 4. Summary + Telegram ────────────────────────────────────────────────
+    # ── 5. Summary ────────────────────────────────────────────────────────────
     summary = {"run_id": run_id, "topic": en_script.get("title"), "results": results}
     (run_dir / "run_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2))
     _notify_telegram(summary)
 
     log.info("\n=== PIPELINE COMPLETE ===")
     for lang, r in results.items():
-        status = r.get("status", "?")
-        detail = r.get("long_url") or r.get("error", "")
-        log.info(f"  [{lang.upper()}] {status}: {detail}")
+        log.info(f"  [{lang.upper()}] {r.get('status')}: {r.get('long_url') or r.get('error', '')}")
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Visual builder (type-specific) ────────────────────────────────────────────
+
+def _build_visuals(
+    scenes: list,
+    run_dir: Path,
+    video_type: str,
+    library: LibraryEngine,
+    chart_eng: ChartEngine,
+    topic: dict,
+) -> dict:
+    """Returns {scene_id: {image_path, chart_path}} for all scenes."""
+    visuals = {}
+    images_dir = run_dir / "images"
+    charts_dir = run_dir / "charts"
+
+    # Pre-fetch news images once for news-type videos
+    news_images = []
+    if video_type in ("news", "trending_news"):
+        query = topic.get("news_headline", topic.get("title", "financial markets"))
+        news_images = chart_eng.fetch_news_images(query, charts_dir / "news", max_images=6)
+
+    news_img_idx = 0
+
+    for i, scene in enumerate(scenes):
+        sid        = scene["id"]
+        scene_type = scene.get("scene_type", "illustrated")
+        emotion    = scene.get("emotion", "confidence")
+        chart_key  = scene.get("chart_key")
+        images_dir.mkdir(parents=True, exist_ok=True)
+
+        image_path = None
+        chart_path = None
+
+        # ── nac_face scene ───────────────────────────────────────────────────
+        if scene_type == "nac_face":
+            pace = scene.get("pace", "normal")
+            cat  = {"hook": "hook", "cta": "cta", "reveal": "reveal"}.get(pace, "normal")
+            clip = library.get_nac_clip(emotion=emotion, category=cat)
+            image_path = str(clip) if clip else None
+
+        # ── student scene ────────────────────────────────────────────────────
+        elif scene_type == "student":
+            clip = library.get_student_clip(emotion="curiosity")
+            image_path = str(clip) if clip else None
+
+        # ── chart scene ──────────────────────────────────────────────────────
+        elif scene_type == "chart":
+            # Background from library
+            bg = library.get_background("trading")
+            image_path = str(bg) if bg else None
+            # Generate chart
+            if chart_key:
+                chart_path = _generate_chart(chart_key, chart_eng, charts_dir, topic)
+
+        # ── news scene ───────────────────────────────────────────────────────
+        elif scene_type == "news":
+            if news_images and news_img_idx < len(news_images):
+                image_path = str(news_images[news_img_idx])
+                news_img_idx += 1
+            # Also add market impact chart if chart_key set
+            if chart_key:
+                chart_path = _generate_chart(chart_key, chart_eng, charts_dir, topic)
+
+        # ── illustrated scene ────────────────────────────────────────────────
+        else:
+            bg_cat = "classroom" if video_type == "educational" else "trading"
+            bg     = library.get_background(bg_cat)
+            image_path = str(bg) if bg else None
+
+        visuals[sid] = {"image_path": image_path, "chart_path": chart_path}
+
+    return visuals
+
+
+def _generate_chart(chart_key: str, chart_eng: ChartEngine, charts_dir: Path, topic: dict) -> Path | None:
+    charts_dir.mkdir(parents=True, exist_ok=True)
+    symbol = topic.get("symbol", "SPY")
+
+    if chart_key == "pnl":
+        return _fetch_bot_chart("pnl", charts_dir)
+    if chart_key == "equity":
+        return _fetch_bot_chart("equity", charts_dir)
+    if chart_key == "positions":
+        return _fetch_bot_chart("positions", charts_dir)
+    if chart_key == "trades":
+        return _fetch_bot_chart("trades", charts_dir)
+    if chart_key == "candlestick":
+        return chart_eng.candlestick(symbol, "1mo", charts_dir / f"candle_{symbol}.png")
+    if chart_key == "rsi":
+        return chart_eng.rsi_ema(symbol, "3mo", charts_dir / f"rsi_{symbol}.png")
+    if chart_key == "news_impact":
+        ev_date = topic.get("event_date", datetime.now().strftime("%Y-%m-%d"))
+        return chart_eng.news_impact(symbol, ev_date, charts_dir / f"impact_{symbol}.png")
+    return None
+
+
+def _fetch_bot_chart(key: str, charts_dir: Path) -> Path | None:
+    """Fetch pre-rendered chart PNG from Railway trading system."""
+    railway_url = os.environ.get("RAILWAY_API_URL", "")
+    api_key     = os.environ.get("TRADING_API_KEY", "")
+    if not railway_url:
+        return None
+    try:
+        import requests
+        r = requests.get(
+            f"{railway_url}/api/charts/{key}",
+            headers={"X-Api-Key": api_key},
+            timeout=30,
+        )
+        if r.status_code == 200 and "image" in r.headers.get("content-type", ""):
+            p = charts_dir / f"{key}.png"
+            p.write_bytes(r.content)
+            return p
+    except Exception as e:
+        log.warning(f"  Bot chart [{key}] fetch failed: {e}")
+    return None
+
+
+# ── Shared helpers ────────────────────────────────────────────────────────────
 
 def _generate_audio(scenes: list, out_dir: Path, voice_engine: VoiceEngine, lang: str) -> list:
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -236,32 +346,14 @@ def _generate_audio(scenes: list, out_dir: Path, voice_engine: VoiceEngine, lang
     return result
 
 
-def _generate_clips(scenes: list, out_dir: Path, engine: HiggsFieldEngine, orientation: str) -> dict:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    clips = {}
-    for scene in scenes:
-        sid       = scene["id"]
-        clip_path = out_dir / f"scene_{sid:03d}.mp4"
-        visual    = scene.get("visual_prompt") or ", ".join(scene.get("visual_keywords", ["NacArtha trading room"]))
-        audio_path = Path(scene.get("narration_path", "")) if scene.get("narration_path") else None
-
-        log.info(f"  Scene {sid} [{scene.get('pace','?')}] → HiggsField")
-        result = engine.generate(visual, clip_path, orientation, audio_path=audio_path)
-        if result:
-            clips[sid] = result
-        else:
-            log.warning(f"  Scene {sid}: HiggsField failed — will use black fallback")
-    return clips
-
-
-def _black_clip(run_dir: Path) -> Path:
-    fb = run_dir / "clips" / "fallback_black.mp4"
+def _black_image(run_dir: Path) -> Path:
+    fb = run_dir / "images" / "fallback_black.jpg"
     if not fb.exists():
         fb.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run([
             "ffmpeg", "-y",
-            "-f", "lavfi", "-i", "color=c=black:s=1920x1080:r=30",
-            "-t", "5", "-c:v", "libx264", "-crf", "23", str(fb),
+            "-f", "lavfi", "-i", "color=c=black:s=1920x1080",
+            "-frames:v", "1", str(fb),
         ], capture_output=True)
     return fb
 
