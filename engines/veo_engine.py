@@ -1,11 +1,5 @@
 """
-VeoEngine — video clip generation via Google Veo (Omni).
-
-Generates actual animated video clips (not static images).
-Used for background scene clips in the library:
-  - Trading room scenes with real motion
-  - Classroom/educational scenes
-  - News aesthetic scenes
+VeoEngine — video clip generation via Google Veo.
 
 Auth: GOOGLE_API_KEY (from Google AI Studio)
 """
@@ -15,8 +9,6 @@ import logging
 import os
 import time
 from pathlib import Path
-
-import requests
 
 log = logging.getLogger("veo_engine")
 
@@ -28,7 +20,7 @@ try:
 except ImportError:
     pass
 
-# Veo 3.1 Fast — balanced quality/cost for background clips ($0.10-0.15/sec)
+# Veo 3.1 Fast — $0.10-0.15/sec, balanced quality for background clips
 _MODEL = "veo-3.1-fast-generate-001"
 
 
@@ -68,19 +60,18 @@ class VeoEngine:
 
             log.info(f"  Veo generating: {prompt[:60]}…")
 
-            operation = self._client.models.generate_video(
+            operation = self._client.models.generate_videos(
                 model=_MODEL,
                 prompt=prompt,
-                config=types.GenerateVideoConfig(
+                config=types.GenerateVideosConfig(
                     aspect_ratio=aspect,
                     duration_seconds=duration,
                     number_of_videos=1,
                     enhance_prompt=True,
-                    generate_audio=False,  # silent background clips — avoids 33-40% audio surcharge
+                    generate_audio=False,  # silent clips — avoids 33-40% audio surcharge
                 ),
             )
 
-            # Poll until complete
             return self._wait_and_download(operation, out_path)
 
         except Exception as e:
@@ -97,21 +88,33 @@ class VeoEngine:
                     if operation.error:
                         log.warning(f"  Veo error: {operation.error}")
                         return None
-                    # Extract video from response
-                    videos = getattr(operation.response, "generated_videos", [])
-                    if not videos:
+
+                    videos = (operation.response or {})
+                    generated = getattr(videos, "generated_videos", []) or []
+                    if not generated:
                         log.warning("  Veo: no videos in response")
                         return None
-                    video = videos[0]
-                    # Download video bytes
-                    video_bytes = self._client.files.download(file=video.video)
-                    out_path.write_bytes(video_bytes)
+
+                    video_obj = generated[0].video
+
+                    # video_bytes may be populated directly
+                    if video_obj.video_bytes:
+                        out_path.write_bytes(video_obj.video_bytes)
+                    elif video_obj.uri:
+                        # Download via files API
+                        video_bytes = self._client.files.download(file=video_obj)
+                        out_path.write_bytes(video_bytes)
+                    else:
+                        log.warning("  Veo: no video bytes or URI in response")
+                        return None
+
                     size_mb = out_path.stat().st_size / (1024 * 1024)
                     log.info(f"  Veo saved → {out_path.name} ({size_mb:.1f} MB)")
                     return out_path
 
                 elapsed = int(time.time() - (deadline - max_wait))
-                log.info(f"  Veo [{operation.metadata.state if hasattr(operation, 'metadata') else 'processing'}] {elapsed}s…")
+                log.info(f"  Veo [processing] {elapsed}s…")
+
             except Exception as e:
                 log.warning(f"  Veo poll error: {e}")
 
