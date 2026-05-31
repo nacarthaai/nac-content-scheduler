@@ -206,7 +206,7 @@ class LibraryBuilder:
             out_path = out_dir / f"{cid}.mp4"
 
             log.info(f"  Generating [{cid}]: {clip_def['text'][:50]}…")
-            path = self._generate_heygen_clip(clip_def["text"], avatar_id, out_path)
+            path = self._generate_heygen_clip(clip_def["text"], avatar_id, out_path, character)
             if not path:
                 continue
 
@@ -225,19 +225,28 @@ class LibraryBuilder:
             log.info(f"  [{cid}] saved ✓")
             time.sleep(2)  # rate limit buffer
 
-    def _generate_heygen_clip(self, text: str, avatar_id: str, out_path: Path) -> Path | None:
+    def _generate_heygen_clip(self, text: str, avatar_id: str, out_path: Path, character: str = "student") -> Path | None:
         try:
+            # nac is a Photo Avatar (talking_photo); student avatars are regular HeyGen avatars
+            if character == "nac":
+                char_payload = {
+                    "type":             "talking_photo",
+                    "talking_photo_id": avatar_id,
+                }
+            else:
+                char_payload = {
+                    "type":         "avatar",
+                    "avatar_id":    avatar_id,
+                    "avatar_style": "normal",
+                }
+
             # Submit video generation
             r = requests.post(
                 "https://api.heygen.com/v2/video/generate",
                 headers={"X-Api-Key": self._heygen_key, "Content-Type": "application/json"},
                 json={
                     "video_inputs": [{
-                        "character": {
-                            "type":         "avatar",
-                            "avatar_id":    avatar_id,
-                            "avatar_style": "normal",
-                        },
+                        "character": char_payload,
                         "voice": {
                             "type":       "text",
                             "input_text": text,
