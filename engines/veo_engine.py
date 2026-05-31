@@ -65,9 +65,7 @@ class VeoEngine:
                 prompt=prompt,
                 config=types.GenerateVideosConfig(
                     aspect_ratio=aspect,
-                    duration_seconds=duration,
                     number_of_videos=1,
-                    enhance_prompt=True,
                 ),
             )
 
