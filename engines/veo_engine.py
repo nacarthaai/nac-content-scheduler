@@ -20,8 +20,8 @@ try:
 except ImportError:
     pass
 
-# Veo 3.1 Fast — $0.10-0.15/sec, balanced quality for background clips
-_MODEL = "veo-3.1-fast-generate-001"
+# Veo 3.0 Fast — confirmed available on this account
+_MODEL = "veo-3.0-fast-generate-001"
 
 
 class VeoEngine:
