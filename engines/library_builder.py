@@ -251,7 +251,8 @@ class LibraryBuilder:
                             "type":       "text",
                             "input_text": text,
                             "voice_id":   self._nac_voice,
-                            "speed":      1.0,
+                            "speed":      0.95,
+                            "emotion":    "Broadcaster" if character == "nac" else "Friendly",
                         },
                         "background": {
                             "type":  "color",
