@@ -114,6 +114,7 @@ def main(langs: list = None, on_lang_done=None):
 
     # ── 4. Per-language pipeline ──────────────────────────────────────────────
     results = {}
+    en_video_url = None  # populated after EN completes, used for video_translate
 
     for lang in langs:
         log.info(f"\n{'='*55}\n  [{lang.upper()}] Pipeline\n{'='*55}")
@@ -132,7 +133,7 @@ def main(langs: list = None, on_lang_done=None):
             short_path = lang_dir / "short.mp4"
 
             if is_trading_en:
-                # English trading: Veo visuals + Veo built-in audio, no TTS, no SyncLabs
+                # EN trading: Veo visuals + Veo built-in audio
                 log.info(f"  [{lang}] Trading EN — assembling Veo-native audio video…")
                 en_overlays = {s["id"]: s.get("text_overlay") for s in en_script["long_scenes"]}
                 scenes_vis = []
@@ -140,26 +141,45 @@ def main(langs: list = None, on_lang_done=None):
                     v = scene_visuals.get(s["id"], {})
                     scenes_vis.append({
                         **s,
-                        "image_path":  v.get("image_path", str(_black_image(run_dir))),
-                        "chart_path":  v.get("chart_path"),
+                        "image_path":   v.get("image_path", str(_black_image(run_dir))),
+                        "chart_path":   v.get("chart_path"),
                         "text_overlay": en_overlays.get(s["id"]),
-                        "narration_path": None,  # assembler uses native video audio
+                        "narration_path": None,
                     })
                 assembler.assemble_veo_native(
                     scenes_vis, long_path, music_path,
                     hook_text=en_script.get("hook_text", ""),
                     cta_text=en_script.get("cta_text", ""),
                 )
+                # Upload EN video and get public URL for video_translate
+                en_video_url = _upload_for_translate(long_path)
+                log.info(f"  [en] Public URL for translate: {en_video_url[:60] if en_video_url else 'FAILED'}…")
+
+            elif video_type == "bot_performance" and lang in ("hi", "te") and en_video_url:
+                # HI/TE trading: translate EN video — preserves NAC's voice cloned to target language
+                log.info(f"  [{lang}] Video translate from EN → {lang.upper()}…")
+                lang_name = "Hindi (India)" if lang == "hi" else "Telugu (India)"
+                translated = _heygen_video_translate(en_video_url, lang_name, long_path,
+                                                      os.environ.get("HEYGEN_API_KEY",""))
+                if not translated:
+                    log.warning(f"  [{lang}] Video translate failed — falling back to TTS assembly")
+                    scenes = _generate_audio(script["long_scenes"], lang_dir / "audio", voice_engine, lang)
+                    for s in scenes:
+                        v = scene_visuals.get(s["id"], {})
+                        s["image_path"] = v.get("image_path", str(_black_image(run_dir)))
+                        s["chart_path"] = v.get("chart_path")
+                        s["text_overlay"] = None
+                    assembler.assemble(scenes, long_path, "landscape", music_path)
             else:
-                # Standard: generate TTS, assemble, then SyncLabs for HI/TE trading
+                # Standard: TTS assembly (educational, news)
                 log.info(f"  [{lang}] Generating audio…")
                 scenes = _generate_audio(script["long_scenes"], lang_dir / "audio", voice_engine, lang)
 
                 en_overlays = {s["id"]: s.get("text_overlay") for s in en_script["long_scenes"]}
                 for s in scenes:
                     v = scene_visuals.get(s["id"], {})
-                    s["image_path"]  = v.get("image_path", str(_black_image(run_dir)))
-                    s["chart_path"]  = v.get("chart_path")
+                    s["image_path"]   = v.get("image_path", str(_black_image(run_dir)))
+                    s["chart_path"]   = v.get("chart_path")
                     s["text_overlay"] = en_overlays.get(s["id"])
 
                 assembled_path = lang_dir / "assembled.mp4"
@@ -169,18 +189,7 @@ def main(langs: list = None, on_lang_done=None):
                     hook_text=en_script.get("hook_text", ""),
                     cta_text=en_script.get("cta_text", ""),
                 )
-
-                if video_type == "bot_performance" and lang in ("hi", "te") and synclabs.is_ready():
-                    # Lip sync HI/TE trading videos
-                    log.info(f"  [{lang}] Running SyncLabs lip sync…")
-                    tts_audio = lang_dir / "audio" / "full_narration.wav"
-                    _concat_audio(lang_dir / "audio", tts_audio)
-                    synced = synclabs.lipsync(assembled_path, tts_audio, long_path)
-                    if not synced:
-                        log.warning(f"  [{lang}] SyncLabs failed — using un-synced video")
-                        import shutil; shutil.copy2(assembled_path, long_path)
-                else:
-                    import shutil; shutil.copy2(assembled_path, long_path)
+                import shutil; shutil.copy2(assembled_path, long_path)
 
             # Cut short from long video
             log.info(f"  [{lang}] Cutting Short…")
@@ -393,6 +402,64 @@ def _generate_audio(scenes: list, out_dir: Path, voice_engine: VoiceEngine, lang
         s["narration_path"] = str(audio_path)
         result.append(s)
     return result
+
+
+def _upload_for_translate(video_path: Path) -> str | None:
+    """Upload video to transfer.sh and return a public URL for HeyGen video_translate."""
+    try:
+        import requests as _r
+        with open(video_path, "rb") as f:
+            resp = _r.put(
+                f"https://transfer.sh/{video_path.name}",
+                data=f,
+                headers={"Max-Days": "1"},
+                timeout=120,
+            )
+        if resp.status_code == 200:
+            return resp.text.strip()
+        log.warning(f"  transfer.sh upload failed: {resp.status_code}")
+        return None
+    except Exception as e:
+        log.warning(f"  _upload_for_translate error: {e}")
+        return None
+
+
+def _heygen_video_translate(video_url: str, output_language: str, out_path: Path, api_key: str) -> Path | None:
+    """Translate a video to target language using HeyGen's voice-cloning translation API."""
+    import requests as _r, time as _t
+    h = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+    try:
+        r = _r.post("https://api.heygen.com/v2/video_translate", headers=h,
+                    json={"video_url": video_url, "output_language": output_language}, timeout=30)
+        if r.status_code not in (200, 202):
+            log.warning(f"  HeyGen translate submit failed: {r.status_code} {r.text[:200]}")
+            return None
+        tid = r.json()["data"]["video_translate_id"]
+        log.info(f"  HeyGen translate job={tid}")
+
+        deadline = _t.time() + 1800
+        while _t.time() < deadline:
+            _t.sleep(20)
+            s = _r.get(f"https://api.heygen.com/v2/video_translate/{tid}", headers={"X-Api-Key": api_key}, timeout=15)
+            d = s.json().get("data", {})
+            status = d.get("status", "")
+            log.info(f"  HeyGen translate [{status}]")
+            if status == "success":
+                url = d.get("url") or d.get("video_url", "")
+                resp = _r.get(url, stream=True, timeout=120)
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(out_path, "wb") as f:
+                    for chunk in resp.iter_content(8192): f.write(chunk)
+                log.info(f"  HeyGen translate saved → {out_path.name} ({out_path.stat().st_size/1024/1024:.1f} MB)")
+                return out_path
+            if status in ("failed", "error"):
+                log.warning(f"  HeyGen translate failed: {d}")
+                return None
+        log.warning("  HeyGen translate timeout")
+        return None
+    except Exception as e:
+        log.error(f"  _heygen_video_translate error: {e}", exc_info=True)
+        return None
 
 
 def _concat_audio(audio_dir: Path, out_path: Path):
