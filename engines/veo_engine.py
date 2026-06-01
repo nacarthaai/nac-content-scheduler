@@ -20,8 +20,10 @@ try:
 except ImportError:
     pass
 
-# Veo 3.0 Fast — confirmed available on this account
+# Background clips — Veo 3.0 Fast (no face reference needed)
 _MODEL = "veo-3.0-fast-generate-001"
+# NAC character clips — Veo 3.1 (supports reference_images for face locking)
+_MODEL_CHAR = "veo-3.1-generate-preview"
 
 
 class VeoEngine:
@@ -117,6 +119,28 @@ class VeoEngine:
 
         log.warning(f"  Veo timeout ({max_wait}s)")
         return None
+
+    def generate_with_reference(self, prompt: str, out_path: Path, ref_image) -> Path | None:
+        """Generate a clip with a face/character reference image (Veo 3.1)."""
+        if not self._client:
+            return None
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            log.info(f"  Veo 3.1 generating with character ref: {prompt[:60]}…")
+            operation = self._client.models.generate_videos(
+                model=_MODEL_CHAR,
+                prompt=prompt,
+                config=types.GenerateVideosConfig(
+                    aspect_ratio="16:9",
+                    number_of_videos=1,
+                    person_generation="allow_adult",
+                    reference_images=[ref_image],
+                ),
+            )
+            return self._wait_and_download(operation, out_path, max_wait=600)
+        except Exception as e:
+            log.error(f"  Veo generate_with_reference error: {e}", exc_info=True)
+            return None
 
     def is_ready(self) -> bool:
         return self._client is not None

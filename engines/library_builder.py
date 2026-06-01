@@ -158,6 +158,37 @@ VEO_BACKGROUNDS = [
     {"id": "veo_news_005", "category": "news", "prompt": "Close-up of smartphone screen showing stock alert notification, blurred trading room in background with glowing monitors, cinematic shallow focus, gold and blue ambient light"},
 ]
 
+# NAC character clips — Veo 3.1 with ne.jpg face reference
+# Used as primary visuals for trading/bot_performance videos
+_NAC_CHAR_GUARDRAIL = (
+    "Indian male trader, short dark hair, short beard, black-rimmed rectangular glasses, dark jacket. "
+    "Luxury Bloomberg trading desk with glowing gold and blue monitors, city skyline at night through glass windows. "
+    "Cinematic depth of field, 4K photorealistic, dark luxury trading office."
+)
+
+VEO_NAC_CLIPS = [
+    {"id": "nac_veo_001", "pose": "desk_study",    "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He leans forward, studying the screens intensely, medium shot."},
+    {"id": "nac_veo_002", "pose": "desk_typing",   "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He types rapidly on keyboard, focused and deliberate, hands visible, medium shot."},
+    {"id": "nac_veo_003", "pose": "camera_direct", "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He looks directly at camera with confident expression, speaking, medium shot."},
+    {"id": "nac_veo_004", "pose": "pointing",      "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He points decisively at a specific screen showing a chart breakout, excited and focused."},
+    {"id": "nac_veo_005", "pose": "arms_crossed",  "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He leans back, arms crossed, confident satisfied smile, looking at camera."},
+    {"id": "nac_veo_006", "pose": "nodding",       "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He nods slowly, subtle satisfied smile, reviewing screen results, medium shot."},
+    {"id": "nac_veo_007", "pose": "thinking",      "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He holds chin, thinking pose, analyzing a pattern on screen, contemplative."},
+    {"id": "nac_veo_008", "pose": "surprised",     "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He raises eyebrows, leans forward sharply, surprised by sudden market move on screen."},
+    {"id": "nac_veo_009", "pose": "wide_shot",     "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} Wide establishing shot, he sits at center of trading command center, multiple screens glowing."},
+    {"id": "nac_veo_010", "pose": "window",        "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He glances toward floor-to-ceiling window, city skyline glowing, reflective confident moment."},
+    {"id": "nac_veo_011", "pose": "desk_check",    "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He checks multiple screens simultaneously, head moving between displays, highly focused."},
+    {"id": "nac_veo_012", "pose": "execute_trade", "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He makes decisive gesture toward keyboard, about to execute a trade, intense concentration."},
+    {"id": "nac_veo_013", "pose": "pnl_review",   "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He looks at P&L screen showing green numbers, calm smile of satisfaction, controlled emotion."},
+    {"id": "nac_veo_014", "pose": "close_face",   "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} Close-up of his face, glasses reflecting chart data, intense focused expression, shallow depth of field."},
+    {"id": "nac_veo_015", "pose": "camera_point", "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He leans toward camera, points directly at viewer with index finger, intense eye contact, medium shot."},
+    {"id": "nac_veo_016", "pose": "dismiss",       "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He shakes head slightly, dismissing a bad signal on screen, controlled confident expression."},
+    {"id": "nac_veo_017", "pose": "patient",       "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He sits back, patient expression, watching screen, waiting for the right signal, calm composure."},
+    {"id": "nac_veo_018", "pose": "satisfied",     "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He leans back, takes a breath, satisfied with completed trade, screens show green results."},
+    {"id": "nac_veo_019", "pose": "desk_wide2",   "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} Side angle shot, he studies charts from the left, city skyline behind him at night, cinematic profile."},
+    {"id": "nac_veo_020", "pose": "opening",       "prompt": f"Using the provided character sheet: {_NAC_CHAR_GUARDRAIL} He sits down at desk, settles in, begins trading session, purposeful and ready, wide medium shot."},
+]
+
 
 class LibraryBuilder:
 
@@ -380,6 +411,65 @@ class LibraryBuilder:
             log.info(f"  [{bid}] saved ✓")
             time.sleep(65)  # Veo QPM rate limit — 10 req/10min
 
+    # ── Veo NAC character clips ───────────────────────────────────────────────
+
+    def build_nac_veo(self, force: bool = False):
+        """Generate NAC character clips via Veo 3.1 with ne.jpg face reference."""
+        if not self._veo.is_ready():
+            log.error("Veo not ready — check GOOGLE_API_KEY")
+            return
+
+        portrait_path = Path(__file__).parent.parent / "assets" / "nac_portrait.jpg"
+        if not portrait_path.exists():
+            log.error(f"NAC portrait not found: {portrait_path}")
+            return
+
+        from google.genai import types as gtypes
+        ref_image = gtypes.VideoGenerationReferenceImage(
+            image=gtypes.Image.from_file(location=str(portrait_path), mime_type="image/jpeg"),
+            reference_type="ASSET",
+        )
+
+        index = _load_index()
+        existing_ids = {c["id"] for c in index}
+        out_dir = LIBRARY_DIR / "veo" / "nac"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        log.info("=== Building Veo NAC character clip library ===")
+        for clip in VEO_NAC_CLIPS:
+            cid      = clip["id"]
+            out_path = out_dir / f"{cid}.mp4"
+
+            if cid in existing_ids and not force:
+                log.info(f"  [{cid}] already in library — skip")
+                continue
+
+            if out_path.exists() and not force:
+                entry = {"id": cid, "type": "veo_nac", "pose": clip["pose"],
+                         "path": str(out_path.relative_to(LIBRARY_DIR))}
+                index = [c for c in index if c["id"] != cid]
+                index.append(entry)
+                _save_index(index)
+                existing_ids.add(cid)
+                log.info(f"  [{cid}] on disk — registered ✓")
+                continue
+
+            log.info(f"  Generating [{cid}] pose={clip['pose']}…")
+            path = self._veo.generate_with_reference(clip["prompt"], out_path, ref_image)
+            if not path:
+                log.warning(f"  [{cid}] failed — skipping")
+                continue
+
+            entry = {"id": cid, "type": "veo_nac", "pose": clip["pose"],
+                     "path": str(out_path.relative_to(LIBRARY_DIR))}
+            index = [c for c in index if c["id"] != cid]
+            index.append(entry)
+            _save_index(index)
+            log.info(f"  [{cid}] saved ✓")
+            time.sleep(65)
+
+        log.info("=== NAC character library build complete ===")
+
 
 def _load_index() -> list:
     if not INDEX_PATH.exists():
@@ -397,9 +487,10 @@ def _save_index(clips: list):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--heygen", action="store_true", help="Build HeyGen clips only")
-    parser.add_argument("--veo",    action="store_true", help="Build Veo background clips only")
-    parser.add_argument("--force",  action="store_true", help="Re-generate existing clips")
+    parser.add_argument("--heygen",   action="store_true", help="Build HeyGen clips only")
+    parser.add_argument("--veo",      action="store_true", help="Build Veo background clips only")
+    parser.add_argument("--nac-veo",  action="store_true", help="Build NAC character Veo clips (Veo 3.1)")
+    parser.add_argument("--force",    action="store_true", help="Re-generate existing clips")
     parser.add_argument("--test",   action="store_true", help="Test API connections only — no generation")
     args = parser.parse_args()
 
@@ -436,7 +527,7 @@ if __name__ == "__main__":
         log.info("=== Test complete ===")
         import sys; sys.exit(0)
 
-    build_all = not args.heygen and not args.veo
+    build_all = not args.heygen and not args.veo and not getattr(args, 'nac_veo', False)
 
     if args.heygen or build_all:
         log.info("=== Building HeyGen clip library ===")
@@ -445,5 +536,8 @@ if __name__ == "__main__":
     if args.veo or build_all:
         log.info("=== Building Veo background clip library ===")
         builder.build_veo(force=args.force)
+
+    if getattr(args, 'nac_veo', False):
+        builder.build_nac_veo(force=args.force)
 
     log.info("=== Library build complete ===")
