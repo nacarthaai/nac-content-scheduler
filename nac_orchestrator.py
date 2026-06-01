@@ -246,11 +246,20 @@ def _build_visuals(
         image_path = None
         chart_path = None
 
+        is_trading = video_type == "bot_performance"
+
         # ── nac_face scene ───────────────────────────────────────────────────
         if scene_type == "nac_face":
             pace = scene.get("pace", "normal")
-            cat  = {"hook": "hook", "cta": "cta", "reveal": "reveal"}.get(pace, "normal")
-            clip = library.get_nac_clip(emotion=emotion, category=cat)
+            if is_trading:
+                # Trading videos: prefer Veo 3.1 NAC character clip
+                pose_map = {"hook": "camera_direct", "cta": "camera_point", "reveal": "pointing"}
+                clip = library.get_nac_veo_clip(pose=pose_map.get(pace)) or library.get_nac_veo_clip()
+            else:
+                clip = None
+            if not clip:
+                cat  = {"hook": "hook", "cta": "cta", "reveal": "reveal"}.get(pace, "normal")
+                clip = library.get_nac_clip(emotion=emotion, category=cat)
             image_path = str(clip) if clip else None
 
         # ── student scene ────────────────────────────────────────────────────
@@ -260,11 +269,13 @@ def _build_visuals(
 
         # ── chart scene ──────────────────────────────────────────────────────
         elif scene_type == "chart":
-            # Background from library — classroom for educational, trading for others
-            bg_cat = "classroom" if video_type == "educational" else "trading"
-            bg = library.get_background(bg_cat)
+            if is_trading:
+                # Trading: NAC in scene with chart overlaid on top
+                bg = library.get_nac_veo_clip(pose="desk_study") or library.get_nac_veo_clip()
+            else:
+                bg_cat = "classroom" if video_type == "educational" else "trading"
+                bg = library.get_background(bg_cat)
             image_path = str(bg) if bg else None
-            # Generate chart
             if chart_key:
                 chart_path = _generate_chart(chart_key, chart_eng, charts_dir, topic)
 
@@ -273,14 +284,16 @@ def _build_visuals(
             if news_images and news_img_idx < len(news_images):
                 image_path = str(news_images[news_img_idx])
                 news_img_idx += 1
-            # Also add market impact chart if chart_key set
             if chart_key:
                 chart_path = _generate_chart(chart_key, chart_eng, charts_dir, topic)
 
         # ── illustrated scene ────────────────────────────────────────────────
         else:
-            bg_cat = "classroom" if video_type == "educational" else "trading"
-            bg     = library.get_background(bg_cat)
+            if is_trading:
+                bg = library.get_nac_veo_clip()
+            else:
+                bg_cat = "classroom" if video_type == "educational" else "trading"
+                bg     = library.get_background(bg_cat)
             image_path = str(bg) if bg else None
 
         visuals[sid] = {"image_path": image_path, "chart_path": chart_path}

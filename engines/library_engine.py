@@ -47,6 +47,23 @@ class LibraryEngine:
     def get_student_clip(self, emotion: str = "curiosity", category: str = None) -> Path | None:
         return self._get_clip("student", emotion, category)
 
+    def get_nac_veo_clip(self, pose: str = None) -> Path | None:
+        """Return a Veo 3.1 NAC character clip. Optionally filter by pose."""
+        candidates = [
+            c for c in self._index
+            if c.get("type") == "veo_nac"
+            and (pose is None or c.get("pose") == pose)
+        ]
+        if not candidates:
+            log.warning(f"  No NAC Veo clips in library (pose={pose}) — will use HeyGen fallback")
+            return None
+        chosen = random.choice(candidates)
+        p = LIBRARY_DIR / chosen["path"]
+        if p.exists():
+            log.info(f"  NAC Veo [{chosen['id']}] pose={chosen['pose']}")
+            return p
+        return None
+
     def get_background(self, scene_category: str = "trading") -> Path | None:
         """scene_category: trading | classroom | news"""
         clips = [
