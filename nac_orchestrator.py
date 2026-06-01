@@ -260,8 +260,9 @@ def _build_visuals(
 
         # ── chart scene ──────────────────────────────────────────────────────
         elif scene_type == "chart":
-            # Background from library
-            bg = library.get_background("trading")
+            # Background from library — classroom for educational, trading for others
+            bg_cat = "classroom" if video_type == "educational" else "trading"
+            bg = library.get_background(bg_cat)
             image_path = str(bg) if bg else None
             # Generate chart
             if chart_key:

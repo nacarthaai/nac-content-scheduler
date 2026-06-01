@@ -162,12 +162,14 @@ VEO_BACKGROUNDS = [
 class LibraryBuilder:
 
     def __init__(self):
-        self._heygen_key  = os.environ.get("HEYGEN_API_KEY", "")
-        self._nac_avatar  = os.environ.get("HEYGEN_AVATAR_ID_NAC", "")
-        self._stu_avatar  = os.environ.get("HEYGEN_AVATAR_ID_STUDENT", "")
-        self._stu_avatar2 = os.environ.get("HEYGEN_AVATAR_ID_STUDENT_2", "")
-        self._nac_voice   = os.environ.get("HEYGEN_VOICE_ID_EN", "")
-        self._veo         = VeoEngine()
+        self._heygen_key   = os.environ.get("HEYGEN_API_KEY", "")
+        self._nac_avatar   = os.environ.get("HEYGEN_AVATAR_ID_NAC", "")
+        self._stu_avatar   = os.environ.get("HEYGEN_AVATAR_ID_STUDENT", "")
+        self._stu_avatar2  = os.environ.get("HEYGEN_AVATAR_ID_STUDENT_2", "")
+        self._nac_voice    = os.environ.get("HEYGEN_VOICE_ID_EN", "")
+        self._stu_voice_m  = os.environ.get("HEYGEN_VOICE_ID_STUDENT_MALE", "")
+        self._stu_voice_f  = os.environ.get("HEYGEN_VOICE_ID_STUDENT_FEMALE", "")
+        self._veo          = VeoEngine()
         LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
 
     # ── HeyGen clips ─────────────────────────────────────────────────────────
@@ -180,10 +182,17 @@ class LibraryBuilder:
         index = _load_index()
         existing_ids = {c["id"] for c in index}
 
-        # Alternate between two student avatars across 9 clips for visual variety
-        stu_avatars = [a for a in [self._stu_avatar, self._stu_avatar2] if a]
+        # Alternate between two student avatars for visual variety.
+        # avatar2 (Ramisa) is a photo avatar — mark it as talking_photo type.
+        stu_avatars = []
+        if self._stu_avatar:
+            stu_avatars.append((self._stu_avatar, "student"))
+        if self._stu_avatar2:
+            stu_avatars.append((self._stu_avatar2, "student_photo"))  # talking_photo type
+
         student_entries = [
-            (c, "student", stu_avatars[i % len(stu_avatars)] if stu_avatars else "")
+            (c, stu_avatars[i % len(stu_avatars)][1], stu_avatars[i % len(stu_avatars)][0])
+            if stu_avatars else (c, "student", "")
             for i, c in enumerate(STUDENT_CLIPS)
         ]
 
@@ -201,7 +210,7 @@ class LibraryBuilder:
                 log.warning(f"  [{cid}] no avatar ID for {character} — set HEYGEN_AVATAR_ID_{'NAC' if character=='nac' else 'STUDENT'}")
                 continue
 
-            out_dir = LIBRARY_DIR / "heygen" / character
+            out_dir = LIBRARY_DIR / "heygen" / "student"
             out_dir.mkdir(parents=True, exist_ok=True)
             out_path = out_dir / f"{cid}.mp4"
 
@@ -227,8 +236,8 @@ class LibraryBuilder:
 
     def _generate_heygen_clip(self, text: str, avatar_id: str, out_path: Path, character: str = "student") -> Path | None:
         try:
-            # nac is a Photo Avatar (talking_photo); student avatars are regular HeyGen avatars
-            if character == "nac":
+            # nac and student_photo are Photo Avatars (talking_photo); student is a regular avatar
+            if character in ("nac", "student_photo"):
                 char_payload = {
                     "type":             "talking_photo",
                     "talking_photo_id": avatar_id,
@@ -250,7 +259,11 @@ class LibraryBuilder:
                         "voice": {
                             "type":       "text",
                             "input_text": text,
-                            "voice_id":   self._nac_voice,
+                            "voice_id":   (
+                                self._nac_voice   if character == "nac" else
+                                self._stu_voice_f if character == "student_photo" else
+                                self._stu_voice_m
+                            ),
                             "speed":      0.95,
                             "emotion":    "Broadcaster" if character == "nac" else "Friendly",
                         },
@@ -324,13 +337,29 @@ class LibraryBuilder:
 
         for bg in VEO_BACKGROUNDS:
             bid = bg["id"]
+            out_dir = LIBRARY_DIR / "veo" / bg["category"]
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / f"{bid}.mp4"
+
             if bid in existing_ids and not force:
                 log.info(f"  [{bid}] already in library — skip")
                 continue
 
-            out_dir = LIBRARY_DIR / "veo" / bg["category"]
-            out_dir.mkdir(parents=True, exist_ok=True)
-            out_path = out_dir / f"{bid}.mp4"
+            # File exists on disk but missing from index (e.g. due to concurrent write race)
+            if out_path.exists() and not force:
+                entry = {
+                    "id":       bid,
+                    "type":     "veo",
+                    "category": bg["category"],
+                    "prompt":   bg["prompt"],
+                    "path":     str(out_path.relative_to(LIBRARY_DIR)),
+                }
+                index = [c for c in index if c["id"] != bid]
+                index.append(entry)
+                _save_index(index)
+                existing_ids.add(bid)
+                log.info(f"  [{bid}] file on disk — registered ✓")
+                continue
 
             log.info(f"  Generating [{bid}]: {bg['prompt'][:60]}…")
             path = self._veo.generate(bg["prompt"], out_path, orientation="landscape", duration=5)
@@ -394,10 +423,12 @@ if __name__ == "__main__":
             log.error("  HeyGen ✗  HEYGEN_API_KEY not set")
 
         # Avatar IDs
-        log.info(f"  NAC avatar:      {'✓ set' if builder._nac_avatar  else '✗ NOT SET'}")
-        log.info(f"  STUDENT avatar1: {'✓ set' if builder._stu_avatar  else '✗ NOT SET'}")
-        log.info(f"  STUDENT avatar2: {'✓ set' if builder._stu_avatar2 else '✗ NOT SET'}")
-        log.info(f"  Voice EN:        {'✓ set' if builder._nac_voice   else '✗ NOT SET'}")
+        log.info(f"  NAC avatar:         {'✓ set' if builder._nac_avatar   else '✗ NOT SET'}")
+        log.info(f"  STUDENT avatar1:    {'✓ set' if builder._stu_avatar   else '✗ NOT SET'}")
+        log.info(f"  STUDENT avatar2:    {'✓ set' if builder._stu_avatar2  else '✗ NOT SET'}")
+        log.info(f"  Voice NAC:          {'✓ set' if builder._nac_voice    else '✗ NOT SET'}")
+        log.info(f"  Voice student male: {'✓ set' if builder._stu_voice_m  else '✗ NOT SET'}")
+        log.info(f"  Voice student fem:  {'✓ set' if builder._stu_voice_f  else '✗ NOT SET'}")
 
         # Veo
         log.info(f"  Veo engine:      {'✓ ready' if builder._veo.is_ready() else '✗ NOT READY — check GOOGLE_API_KEY'}")
