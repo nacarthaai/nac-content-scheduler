@@ -127,7 +127,7 @@ def main(langs: list = None, on_lang_done=None):
                 json.dumps(script, ensure_ascii=False, indent=2)
             )
 
-            is_trading_en = (video_type == "bot_performance" and lang == "en")
+            is_trading_en = (video_type in ("bot_performance", "bot") and lang == "en")
 
             long_path  = lang_dir / "long.mp4"
             short_path = lang_dir / "short.mp4"
@@ -155,7 +155,7 @@ def main(langs: list = None, on_lang_done=None):
                 en_video_url = _upload_for_translate(long_path)
                 log.info(f"  [en] Public URL for translate: {en_video_url[:60] if en_video_url else 'FAILED'}…")
 
-            elif video_type == "bot_performance" and lang in ("hi", "te") and en_video_url:
+            elif video_type in ("bot_performance", "bot") and lang in ("hi", "te") and en_video_url:
                 # HI/TE trading: translate EN video — preserves NAC's voice cloned to target language
                 log.info(f"  [{lang}] Video translate from EN → {lang.upper()}…")
                 lang_name = "Hindi (India)" if lang == "hi" else "Telugu (India)"
@@ -290,7 +290,7 @@ def _build_visuals(
         image_path = None
         chart_path = None
 
-        is_trading = video_type == "bot_performance"
+        is_trading = video_type in ("bot_performance", "bot")
 
         # ── nac_face scene ───────────────────────────────────────────────────
         if scene_type == "nac_face":
