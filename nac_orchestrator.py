@@ -32,6 +32,7 @@ from engines.music_engine     import MusicEngine
 from engines.upload_engine    import UploadEngine
 from engines.library_engine   import LibraryEngine
 from engines.chart_engine     import ChartEngine
+from engines.synclabs_engine  import SyncLabsEngine
 
 logging.basicConfig(
     level=logging.INFO,
@@ -73,6 +74,7 @@ def main(langs: list = None, on_lang_done=None):
     music_engine     = MusicEngine()
     library          = LibraryEngine()
     charts           = ChartEngine()
+    synclabs         = SyncLabsEngine()
     uploader         = UploadEngine(
         client_id=os.environ.get("YOUTUBE_CLIENT_ID", ""),
         client_secret=os.environ.get("YOUTUBE_CLIENT_SECRET", ""),
@@ -124,28 +126,61 @@ def main(langs: list = None, on_lang_done=None):
                 json.dumps(script, ensure_ascii=False, indent=2)
             )
 
-            # Generate audio per language
-            log.info(f"  [{lang}] Generating audio…")
-            scenes = _generate_audio(script["long_scenes"], lang_dir / "audio", voice_engine, lang)
+            is_trading_en = (video_type == "bot_performance" and lang == "en")
 
-            # Attach visuals (image/video path + chart path)
-            en_overlays = {s["id"]: s.get("text_overlay") for s in en_script["long_scenes"]}
-            for s in scenes:
-                v = scene_visuals.get(s["id"], {})
-                s["image_path"]  = v.get("image_path", str(_black_image(run_dir)))
-                s["chart_path"]  = v.get("chart_path")
-                s["text_overlay"] = en_overlays.get(s["id"])  # English only
-
-            # Assemble long video
             long_path  = lang_dir / "long.mp4"
             short_path = lang_dir / "short.mp4"
 
-            log.info(f"  [{lang}] Assembling long video…")
-            assembler.assemble(
-                scenes, long_path, "landscape", music_path,
-                hook_text=en_script.get("hook_text", ""),
-                cta_text=en_script.get("cta_text", ""),
-            )
+            if is_trading_en:
+                # English trading: Veo visuals + Veo built-in audio, no TTS, no SyncLabs
+                log.info(f"  [{lang}] Trading EN — assembling Veo-native audio video…")
+                en_overlays = {s["id"]: s.get("text_overlay") for s in en_script["long_scenes"]}
+                scenes_vis = []
+                for s in en_script["long_scenes"]:
+                    v = scene_visuals.get(s["id"], {})
+                    scenes_vis.append({
+                        **s,
+                        "image_path":  v.get("image_path", str(_black_image(run_dir))),
+                        "chart_path":  v.get("chart_path"),
+                        "text_overlay": en_overlays.get(s["id"]),
+                        "narration_path": None,  # assembler uses native video audio
+                    })
+                assembler.assemble_veo_native(
+                    scenes_vis, long_path, music_path,
+                    hook_text=en_script.get("hook_text", ""),
+                    cta_text=en_script.get("cta_text", ""),
+                )
+            else:
+                # Standard: generate TTS, assemble, then SyncLabs for HI/TE trading
+                log.info(f"  [{lang}] Generating audio…")
+                scenes = _generate_audio(script["long_scenes"], lang_dir / "audio", voice_engine, lang)
+
+                en_overlays = {s["id"]: s.get("text_overlay") for s in en_script["long_scenes"]}
+                for s in scenes:
+                    v = scene_visuals.get(s["id"], {})
+                    s["image_path"]  = v.get("image_path", str(_black_image(run_dir)))
+                    s["chart_path"]  = v.get("chart_path")
+                    s["text_overlay"] = en_overlays.get(s["id"])
+
+                assembled_path = lang_dir / "assembled.mp4"
+                log.info(f"  [{lang}] Assembling…")
+                assembler.assemble(
+                    scenes, assembled_path, "landscape", music_path,
+                    hook_text=en_script.get("hook_text", ""),
+                    cta_text=en_script.get("cta_text", ""),
+                )
+
+                if video_type == "bot_performance" and lang in ("hi", "te") and synclabs.is_ready():
+                    # Lip sync HI/TE trading videos
+                    log.info(f"  [{lang}] Running SyncLabs lip sync…")
+                    tts_audio = lang_dir / "audio" / "full_narration.wav"
+                    _concat_audio(lang_dir / "audio", tts_audio)
+                    synced = synclabs.lipsync(assembled_path, tts_audio, long_path)
+                    if not synced:
+                        log.warning(f"  [{lang}] SyncLabs failed — using un-synced video")
+                        import shutil; shutil.copy2(assembled_path, long_path)
+                else:
+                    import shutil; shutil.copy2(assembled_path, long_path)
 
             # Cut short from long video
             log.info(f"  [{lang}] Cutting Short…")
@@ -358,6 +393,22 @@ def _generate_audio(scenes: list, out_dir: Path, voice_engine: VoiceEngine, lang
         s["narration_path"] = str(audio_path)
         result.append(s)
     return result
+
+
+def _concat_audio(audio_dir: Path, out_path: Path):
+    """Concatenate all scene audio files into one WAV for SyncLabs."""
+    import glob, shutil
+    files = sorted(audio_dir.glob("scene_*.mp3"))
+    if not files:
+        return
+    list_file = audio_dir / "_concat.txt"
+    list_file.write_text("\n".join(f"file '{f}'" for f in files))
+    subprocess.run([
+        "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+        "-i", str(list_file),
+        "-c:a", "pcm_s16le", str(out_path),
+    ], capture_output=True)
+    list_file.unlink(missing_ok=True)
 
 
 def _black_image(run_dir: Path) -> Path:

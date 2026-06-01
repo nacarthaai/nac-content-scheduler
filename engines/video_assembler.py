@@ -76,6 +76,91 @@ class VideoAssembler:
         log.info(f"Assembled {format} → {out_path.name} ({size_mb:.1f} MB)")
         return out_path
 
+    def assemble_veo_native(
+        self,
+        scenes: list,
+        out_path: Path,
+        music_path=None,
+        hook_text: str = "",
+        cta_text: str = "",
+    ) -> Path:
+        """Assemble Veo clips keeping their native audio (English trading videos)."""
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        w, h = 1920, 1080
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            scene_paths = []
+            for i, scene in enumerate(scenes):
+                ip = scene.get("image_path")
+                if not ip or not Path(ip).exists():
+                    continue
+                src = Path(ip)
+                if src.suffix.lower() not in (".mp4", ".mov", ".webm", ".mkv"):
+                    continue  # skip non-video scenes (charts, images)
+
+                scene_out = tmp / f"scene_{i:03d}.mp4"
+                overlay   = scene.get("text_overlay") or ""
+                extra     = hook_text if i == 0 else (cta_text if i == len(scenes) - 1 else "")
+                chart_path = Path(scene["chart_path"]) if scene.get("chart_path") else None
+
+                # Trim/scale clip, keep native audio
+                base = tmp / f"scene_{i:03d}_base.mp4"
+                _run([
+                    "ffmpeg", "-y", "-i", str(src),
+                    "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},fps=30",
+                    "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", "-b:a", "128k",
+                    str(base),
+                ])
+
+                # Text overlay PNG
+                png = tmp / f"scene_{i:03d}_ovr.png"
+                _make_text_png(overlay, extra, w, h, png)
+
+                if chart_path and chart_path.exists():
+                    chart_w, chart_h = int(w * 0.80), int(h * 0.38)
+                    chart_x, chart_y = (w - chart_w) // 2, int(h * 0.55)
+                    _run([
+                        "ffmpeg", "-y",
+                        "-i", str(base), "-i", str(png), "-i", str(chart_path),
+                        "-filter_complex",
+                        f"[0:v][1:v]overlay=0:0[with_text];"
+                        f"[2:v]scale={chart_w}:{chart_h}[chart];"
+                        f"[with_text][chart]overlay={chart_x}:{chart_y}[v]",
+                        "-map", "[v]", "-map", "0:a",
+                        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                        "-c:a", "copy", str(scene_out),
+                    ])
+                else:
+                    _run([
+                        "ffmpeg", "-y", "-i", str(base), "-i", str(png),
+                        "-filter_complex", "[0:v][1:v]overlay=0:0[v]",
+                        "-map", "[v]", "-map", "0:a",
+                        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                        "-c:a", "copy", str(scene_out),
+                    ])
+
+                base.unlink(missing_ok=True)
+                png.unlink(missing_ok=True)
+                scene_paths.append(scene_out)
+
+            if not scene_paths:
+                log.warning("assemble_veo_native: no valid Veo scenes found")
+                return out_path
+
+            raw = tmp / "raw.mp4"
+            self._concat(scene_paths, raw)
+
+            if music_path and Path(music_path).exists():
+                self._mix_music(raw, Path(music_path), out_path)
+            else:
+                import shutil; shutil.copy2(raw, out_path)
+
+        size_mb = out_path.stat().st_size / (1024 * 1024)
+        log.info(f"Assembled Veo-native → {out_path.name} ({size_mb:.1f} MB)")
+        return out_path
+
     def cut_short(self, long_path: Path, short_path: Path) -> Path:
         """Cut first 60s of landscape long video → portrait 1080×1920 Short."""
         short_path.parent.mkdir(parents=True, exist_ok=True)
