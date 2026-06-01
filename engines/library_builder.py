@@ -349,7 +349,7 @@ class LibraryBuilder:
             index.append(entry)
             _save_index(index)
             log.info(f"  [{bid}] saved ✓")
-            time.sleep(5)  # brief pause between Veo jobs
+            time.sleep(65)  # Veo QPM rate limit — 10 req/10min
 
 
 def _load_index() -> list:
