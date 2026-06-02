@@ -1,9 +1,10 @@
 """
-RunwayEngine — AI hero shots via Runway Gen-3 Alpha Turbo.
+RunwayEngine — cinematic clip generation via Runway Gen-3 Alpha Turbo.
 
-Budget cap: 1 clip per format (long + short) = 2 clips per day.
-Each clip: 5 seconds × 5 credits = 25 credits. Standard plan: ~625 credits/month.
+image_to_video: uses a reference frame (NAC face) as the starting image.
+5 credits/second. 5-sec clip = 25 credits. 1000 credits = 40 clips.
 """
+import base64
 import logging
 import os
 import time
@@ -13,14 +14,50 @@ import requests
 
 log = logging.getLogger("runway_engine")
 
-RUNWAY_API = "https://api.dev.runwayml.com/v1"
+RUNWAY_API    = "https://api.dev.runwayml.com/v1"
 CLIP_DURATION = 5
+_VERSION      = "2024-11-06"
 
 
 class RunwayEngine:
 
     def __init__(self):
         self._key = os.environ.get("RUNWAY_API_KEY", "")
+
+    def is_ready(self) -> bool:
+        return bool(self._key)
+
+    def generate_with_image(self, prompt: str, reference_image: Path,
+                             out_path: Path, duration: int = 5,
+                             ratio: str = "1280:768") -> Path | None:
+        """Image-to-video: animate from a reference frame with cinematic motion."""
+        if not self._key:
+            log.warning("  RUNWAY_API_KEY not set")
+            return None
+        try:
+            with open(reference_image, "rb") as f:
+                img_b64 = "data:image/jpeg;base64," + base64.b64encode(f.read()).decode()
+
+            log.info(f"  Runway i2v: {prompt[:70]}…")
+            r = requests.post(
+                f"{RUNWAY_API}/image_to_video",
+                headers={"Authorization": f"Bearer {self._key}",
+                         "X-Runway-Version": _VERSION},
+                json={"model": "gen3a_turbo", "promptImage": img_b64,
+                      "promptText": prompt, "duration": duration, "ratio": ratio},
+                timeout=30,
+            )
+            if r.status_code != 200:
+                log.error(f"  Runway submit error: {r.status_code} {r.text[:200]}")
+                return None
+            job_id = r.json()["id"]
+            log.info(f"  Runway job={job_id}")
+            return self._poll(job_id, out_path,
+                              {"Authorization": f"Bearer {self._key}",
+                               "X-Runway-Version": _VERSION})
+        except Exception as e:
+            log.error(f"  Runway generate_with_image error: {e}", exc_info=True)
+            return None
 
     def generate(self, visual_description: str, out_path: Path, orientation: str = "landscape") -> Path:
         if not self._key:

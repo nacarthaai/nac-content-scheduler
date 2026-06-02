@@ -158,6 +158,30 @@ VEO_BACKGROUNDS = [
     {"id": "veo_news_005", "category": "news", "prompt": "Close-up of smartphone screen showing stock alert notification, blurred trading room in background with glowing monitors, cinematic shallow focus, gold and blue ambient light"},
 ]
 
+# ── Runway NAC clips (image-to-video from reference frame) ───────────────────
+# Advanced cinematic prompts — reference frame is extracted from nac_veo_001.mp4
+# Each prompt drives character action + camera motion + atmosphere
+
+RUNWAY_NAC_CLIPS = [
+    {"id": "run_nac_001", "pose": "desk_lean",      "prompt": "The man leans forward intensely, fingers hover over keyboard, eyes scanning glowing Bloomberg monitors, slow cinematic push-in, volumetric blue and gold light, ultra shallow depth of field, dark luxury trading room, photorealistic 4K"},
+    {"id": "run_nac_002", "pose": "camera_direct",  "prompt": "The man turns slowly toward camera, makes direct confident eye contact, subtle knowing nod, monitor glow reflects in glasses, slow cinematic dolly forward, atmospheric dark trading room, anamorphic bokeh, photorealistic"},
+    {"id": "run_nac_003", "pose": "pointing",        "prompt": "The man raises right hand decisively and points at a specific screen showing a breakout chart, leans forward with controlled intensity, slow rack focus from screen to face, dark cinematic trading room, dramatic rim lighting"},
+    {"id": "run_nac_004", "pose": "arms_crossed",   "prompt": "The man leans back in chair, arms crossed confidently, quiet satisfied expression, slow camera drift right revealing full trading setup behind him, city skyline glowing at night, cinematic atmospheric haze"},
+    {"id": "run_nac_005", "pose": "typing_fast",    "prompt": "The man types rapidly and decisively on keyboard, leaning close to screens, intense focused expression, extreme close up of hands then pull back to medium shot, electric blue monitor glow, cinematic dark trading office"},
+    {"id": "run_nac_006", "pose": "pnl_check",      "prompt": "The man leans back slightly, eyes moving across multiple screens analyzing data, subtle calm smile forms as P&L numbers glow green, slow tilt down from face to keyboard, luxury trading room atmosphere"},
+    {"id": "run_nac_007", "pose": "thinking",        "prompt": "The man holds chin thoughtfully with one hand, eyes narrowed analyzing a pattern on screen, slow zoom into face revealing deep concentration, dark cinematic atmosphere, gold monitor reflections on face"},
+    {"id": "run_nac_008", "pose": "surprised",       "prompt": "The man leans forward sharply with raised eyebrows as market data on screen shifts suddenly, alert focused reaction, quick rack focus from screen to face, dark luxury trading room, electric blue ambient light"},
+    {"id": "run_nac_009", "pose": "wide_shot",       "prompt": "Slow cinematic pull-back reveals full luxury trading command center, the man seated at center surrounded by glowing monitors showing live charts, city skyline panoramic through floor-to-ceiling glass, dark atmospheric haze, photorealistic 4K"},
+    {"id": "run_nac_010", "pose": "window_gaze",    "prompt": "The man glances toward floor-to-ceiling glass window showing glowing city skyline at night, reflective confident expression, slow camera pan from face to cityscape reflection in glass, cinematic depth of field, dark luxury office"},
+    {"id": "run_nac_011", "pose": "screen_scan",    "prompt": "The man's eyes move methodically across multiple screens, head turns slightly right then left analyzing data, close up on glasses reflecting scrolling charts, slow camera orbit around face, dark trading room, volumetric lighting"},
+    {"id": "run_nac_012", "pose": "execute",         "prompt": "The man reaches forward decisively pressing keyboard, controlled execution posture, screen flashes as trade is placed, slow zoom into hand on keyboard then cut to face showing calm resolve, cinematic split-light trading room"},
+    {"id": "run_nac_013", "pose": "dismiss_signal", "prompt": "The man shakes head slowly with controlled confidence, dismissing a signal on screen that doesn't meet criteria, lean back with measured calm, slow dolly left, dark atmospheric trading room, gold ambient lighting"},
+    {"id": "run_nac_014", "pose": "close_face",     "prompt": "Extreme close-up of face, glasses reflecting scrolling candlestick chart data in gold and blue, intense focused eyes, very slow camera push-in, dark cinematic atmosphere, anamorphic bokeh in background, shallow depth of field"},
+    {"id": "run_nac_015", "pose": "camera_point",   "prompt": "The man leans toward camera and points directly at viewer with index finger, direct intense eye contact, slow push-in, dark luxury trading room visible behind him, gold rim lighting on face, cinematic portrait framing"},
+    {"id": "run_nac_016", "pose": "patient_wait",   "prompt": "The man sits back calmly, hands resting, patient composed expression watching screens, slow camera drift right with gentle tilt down, atmospheric trading room, warm gold desk lamp glow mixed with blue monitor light"},
+    {"id": "run_nac_017", "pose": "satisfied",       "prompt": "The man takes a slow breath and leans back with quiet satisfaction, screens behind him show completed green trade, slow camera pull-back revealing full trading desk, city lights visible, dark cinematic atmosphere"},
+]
+
 # NAC character clips — Veo 3.1 with ne.jpg face reference
 # Used as primary visuals for trading/bot_performance videos
 _NAC_CHAR_GUARDRAIL = (
@@ -202,6 +226,76 @@ class LibraryBuilder:
         self._stu_voice_f  = os.environ.get("HEYGEN_VOICE_ID_STUDENT_FEMALE", "")
         self._veo          = VeoEngine()
         LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
+
+    # ── Runway NAC character clips ────────────────────────────────────────────
+
+    def build_runway_nac(self, force: bool = False):
+        """Generate NAC character clips via Runway Gen-3 Alpha Turbo image-to-video."""
+        from engines.runway_engine import RunwayEngine
+        runway = RunwayEngine()
+        if not runway.is_ready():
+            log.error("RUNWAY_API_KEY not set")
+            return
+
+        # Use best frame from nac_veo_001 as reference (or ne.jpg if not available)
+        veo_clip = LIBRARY_DIR / "veo" / "nac" / "nac_veo_001.mp4"
+        ref_frame = LIBRARY_DIR / "runway_ref_frame.jpg"
+        portrait  = Path(__file__).parent.parent / "assets" / "nac_portrait.jpg"
+
+        if not ref_frame.exists():
+            if veo_clip.exists():
+                import subprocess
+                subprocess.run([
+                    "ffmpeg", "-y", "-i", str(veo_clip),
+                    "-vf", "select=eq(n\\,60)", "-frames:v", "1",
+                    "-update", "1", str(ref_frame),
+                ], capture_output=True)
+                log.info(f"  Reference frame extracted from {veo_clip.name}")
+            elif portrait.exists():
+                import shutil; shutil.copy2(portrait, ref_frame)
+                log.info("  Using nac_portrait.jpg as reference frame")
+            else:
+                log.error("  No reference frame available — run --nac-veo first or add nac_portrait.jpg")
+                return
+
+        index    = _load_index()
+        existing = {c["id"] for c in index}
+        out_dir  = LIBRARY_DIR / "veo" / "nac"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        log.info("=== Building Runway NAC character clip library ===")
+        for clip in RUNWAY_NAC_CLIPS:
+            cid      = clip["id"]
+            out_path = out_dir / f"{cid}.mp4"
+
+            if cid in existing and not force:
+                log.info(f"  [{cid}] already in library — skip")
+                continue
+            if out_path.exists() and not force:
+                entry = {"id": cid, "type": "veo_nac", "pose": clip["pose"],
+                         "path": str(out_path.relative_to(LIBRARY_DIR))}
+                index = [c for c in index if c["id"] != cid]
+                index.append(entry)
+                _save_index(index)
+                existing.add(cid)
+                log.info(f"  [{cid}] on disk — registered ✓")
+                continue
+
+            log.info(f"  Generating [{cid}] pose={clip['pose']}…")
+            path = runway.generate_with_image(clip["prompt"], ref_frame, out_path)
+            if not path:
+                log.warning(f"  [{cid}] failed — skipping")
+                continue
+
+            entry = {"id": cid, "type": "veo_nac", "pose": clip["pose"],
+                     "path": str(out_path.relative_to(LIBRARY_DIR))}
+            index = [c for c in index if c["id"] != cid]
+            index.append(entry)
+            _save_index(index)
+            log.info(f"  [{cid}] saved ✓")
+            time.sleep(3)  # brief pause between jobs
+
+        log.info("=== Runway NAC library build complete ===")
 
     # ── HeyGen clips ─────────────────────────────────────────────────────────
 
@@ -487,10 +581,11 @@ def _save_index(clips: list):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--heygen",   action="store_true", help="Build HeyGen clips only")
-    parser.add_argument("--veo",      action="store_true", help="Build Veo background clips only")
-    parser.add_argument("--nac-veo",  action="store_true", help="Build NAC character Veo clips (Veo 3.1)")
-    parser.add_argument("--force",    action="store_true", help="Re-generate existing clips")
+    parser.add_argument("--heygen",     action="store_true", help="Build HeyGen clips only")
+    parser.add_argument("--veo",        action="store_true", help="Build Veo background clips only")
+    parser.add_argument("--nac-veo",    action="store_true", help="Build NAC character Veo clips (Veo 3.1)")
+    parser.add_argument("--runway-nac", action="store_true", help="Build NAC character clips via Runway Gen-3 Turbo")
+    parser.add_argument("--force",      action="store_true", help="Re-generate existing clips")
     parser.add_argument("--test",   action="store_true", help="Test API connections only — no generation")
     args = parser.parse_args()
 
@@ -539,5 +634,8 @@ if __name__ == "__main__":
 
     if getattr(args, 'nac_veo', False):
         builder.build_nac_veo(force=args.force)
+
+    if getattr(args, 'runway_nac', False):
+        builder.build_runway_nac(force=args.force)
 
     log.info("=== Library build complete ===")
