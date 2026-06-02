@@ -9,6 +9,7 @@ import logging
 import os
 import time
 from pathlib import Path
+from typing import Optional
 
 import requests
 
@@ -29,7 +30,7 @@ class RunwayEngine:
 
     def generate_with_image(self, prompt: str, reference_image: Path,
                              out_path: Path, duration: int = 5,
-                             ratio: str = "1280:768") -> Path | None:
+                             ratio: str = "1280:768") -> Optional[Path]:
         """Image-to-video: animate from a reference frame with cinematic motion."""
         if not self._key:
             log.warning("  RUNWAY_API_KEY not set")
