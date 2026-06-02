@@ -335,7 +335,7 @@ class LibraryBuilder:
                 log.warning(f"  [{cid}] no avatar ID for {character} — set HEYGEN_AVATAR_ID_{'NAC' if character=='nac' else 'STUDENT'}")
                 continue
 
-            out_dir = LIBRARY_DIR / "heygen" / "student"
+            out_dir = LIBRARY_DIR / "heygen" / ("nac" if character == "nac" else "student")
             out_dir.mkdir(parents=True, exist_ok=True)
             out_path = out_dir / f"{cid}.mp4"
 
@@ -622,7 +622,8 @@ if __name__ == "__main__":
         log.info("=== Test complete ===")
         import sys; sys.exit(0)
 
-    build_all = not args.heygen and not args.veo and not getattr(args, 'nac_veo', False)
+    explicit = args.heygen or args.veo or getattr(args, 'nac_veo', False) or getattr(args, 'runway_nac', False)
+    build_all = not explicit
 
     if args.heygen or build_all:
         log.info("=== Building HeyGen clip library ===")
@@ -632,10 +633,12 @@ if __name__ == "__main__":
         log.info("=== Building Veo background clip library ===")
         builder.build_veo(force=args.force)
 
-    if getattr(args, 'nac_veo', False):
+    if getattr(args, 'nac_veo', False) or build_all:
+        log.info("=== Building Veo NAC character clip library ===")
         builder.build_nac_veo(force=args.force)
 
-    if getattr(args, 'runway_nac', False):
+    if getattr(args, 'runway_nac', False) or build_all:
+        log.info("=== Building Runway NAC character clip library ===")
         builder.build_runway_nac(force=args.force)
 
     log.info("=== Library build complete ===")
