@@ -1,0 +1,843 @@
+[
+  {
+    "id": "nac_hook_001",
+    "type": "heygen",
+    "character": "nac",
+    "category": "hook",
+    "emotion": "confidence",
+    "text": "Hey. Nac here. Welcome to my trading world.",
+    "path": "heygen/nac/nac_hook_001.mp4"
+  },
+  {
+    "id": "nac_hook_002",
+    "type": "heygen",
+    "character": "nac",
+    "category": "hook",
+    "emotion": "excitement",
+    "text": "The algorithm just made a decision you need to see.",
+    "path": "heygen/nac/nac_hook_002.mp4"
+  },
+  {
+    "id": "nac_hook_003",
+    "type": "heygen",
+    "character": "nac",
+    "category": "hook",
+    "emotion": "tension",
+    "text": "Three signals. One trade. Let me show you exactly why.",
+    "path": "heygen/nac/nac_hook_003.mp4"
+  },
+  {
+    "id": "nac_hook_004",
+    "type": "heygen",
+    "character": "nac",
+    "category": "hook",
+    "emotion": "confidence",
+    "text": "I trade every day. Today was different.",
+    "path": "heygen/nac/nac_hook_004.mp4"
+  },
+  {
+    "id": "nac_hook_005",
+    "type": "heygen",
+    "character": "nac",
+    "category": "hook",
+    "emotion": "excitement",
+    "text": "The market moved. My algorithm was ready.",
+    "path": "heygen/nac/nac_hook_005.mp4"
+  },
+  {
+    "id": "nac_hook_006",
+    "type": "heygen",
+    "character": "nac",
+    "category": "hook",
+    "emotion": "tension",
+    "text": "I want to show you something most traders never see.",
+    "path": "heygen/nac/nac_hook_006.mp4"
+  },
+  {
+    "id": "nac_conf_001",
+    "type": "heygen",
+    "character": "nac",
+    "category": "confident",
+    "emotion": "confidence",
+    "text": "Here is exactly what the data showed.",
+    "path": "heygen/nac/nac_conf_001.mp4"
+  },
+  {
+    "id": "nac_conf_002",
+    "type": "heygen",
+    "character": "nac",
+    "category": "confident",
+    "emotion": "clarity",
+    "text": "The momentum score crossed seventy-five. That is the trigger.",
+    "path": "heygen/nac/nac_conf_002.mp4"
+  },
+  {
+    "id": "nac_conf_003",
+    "type": "heygen",
+    "character": "nac",
+    "category": "confident",
+    "emotion": "focus",
+    "text": "Risk management blocked it. And that was the right call.",
+    "path": "heygen/nac/nac_conf_003.mp4"
+  },
+  {
+    "id": "nac_conf_004",
+    "type": "heygen",
+    "character": "nac",
+    "category": "confident",
+    "emotion": "clarity",
+    "text": "The algorithm does not guess. It calculates.",
+    "path": "heygen/nac/nac_conf_004.mp4"
+  },
+  {
+    "id": "nac_conf_005",
+    "type": "heygen",
+    "character": "nac",
+    "category": "confident",
+    "emotion": "confidence",
+    "text": "Every trade has a reason. Let me show you this one.",
+    "path": "heygen/nac/nac_conf_005.mp4"
+  },
+  {
+    "id": "nac_conf_006",
+    "type": "heygen",
+    "character": "nac",
+    "category": "confident",
+    "emotion": "insight",
+    "text": "Win rate means nothing without proper risk sizing.",
+    "path": "heygen/nac/nac_conf_006.mp4"
+  },
+  {
+    "id": "nac_conf_007",
+    "type": "heygen",
+    "character": "nac",
+    "category": "confident",
+    "emotion": "focus",
+    "text": "Position size was reduced. The system protected capital first.",
+    "path": "heygen/nac/nac_conf_007.mp4"
+  },
+  {
+    "id": "nac_conf_008",
+    "type": "heygen",
+    "character": "nac",
+    "category": "confident",
+    "emotion": "confidence",
+    "text": "Drawdown controlled. That is the real measure of any strategy.",
+    "path": "heygen/nac/nac_conf_008.mp4"
+  },
+  {
+    "id": "nac_exp_001",
+    "type": "heygen",
+    "character": "nac",
+    "category": "explain",
+    "emotion": "clarity",
+    "text": "Let me explain exactly how this works.",
+    "path": "heygen/nac/nac_exp_001.mp4"
+  },
+  {
+    "id": "nac_exp_002",
+    "type": "heygen",
+    "character": "nac",
+    "category": "explain",
+    "emotion": "focus",
+    "text": "The formula is simpler than you think. Watch.",
+    "path": "heygen/nac/nac_exp_002.mp4"
+  },
+  {
+    "id": "nac_exp_003",
+    "type": "heygen",
+    "character": "nac",
+    "category": "explain",
+    "emotion": "insight",
+    "text": "This is what most traders completely miss.",
+    "path": "heygen/nac/nac_exp_003.mp4"
+  },
+  {
+    "id": "nac_exp_004",
+    "type": "heygen",
+    "character": "nac",
+    "category": "explain",
+    "emotion": "clarity",
+    "text": "The bot uses RSI fourteen, EMA nine and twenty-one, and volume surge.",
+    "path": "heygen/nac/nac_exp_004.mp4"
+  },
+  {
+    "id": "nac_exp_005",
+    "type": "heygen",
+    "character": "nac",
+    "category": "explain",
+    "emotion": "insight",
+    "text": "A two percent maximum risk per trade. That is non-negotiable.",
+    "path": "heygen/nac/nac_exp_005.mp4"
+  },
+  {
+    "id": "nac_exp_006",
+    "type": "heygen",
+    "character": "nac",
+    "category": "explain",
+    "emotion": "clarity",
+    "text": "The momentum score is a composite of four indicators.",
+    "path": "heygen/nac/nac_exp_006.mp4"
+  },
+  {
+    "id": "nac_exp_007",
+    "type": "heygen",
+    "character": "nac",
+    "category": "explain",
+    "emotion": "focus",
+    "text": "When volume spikes before price, that is institutional activity.",
+    "path": "heygen/nac/nac_exp_007.mp4"
+  },
+  {
+    "id": "nac_exp_008",
+    "type": "heygen",
+    "character": "nac",
+    "category": "explain",
+    "emotion": "insight",
+    "text": "Volatility is not the enemy. Unmanaged volatility is.",
+    "path": "heygen/nac/nac_exp_008.mp4"
+  },
+  {
+    "id": "nac_exp_009",
+    "type": "heygen",
+    "character": "nac",
+    "category": "explain",
+    "emotion": "clarity",
+    "text": "A good stop loss is not just a number. It is a plan.",
+    "path": "heygen/nac/nac_exp_009.mp4"
+  },
+  {
+    "id": "nac_exp_010",
+    "type": "heygen",
+    "character": "nac",
+    "category": "explain",
+    "emotion": "focus",
+    "text": "Backtesting tells you what worked. Forward testing tells you what works now.",
+    "path": "heygen/nac/nac_exp_010.mp4"
+  },
+  {
+    "id": "nac_rev_001",
+    "type": "heygen",
+    "character": "nac",
+    "category": "reveal",
+    "emotion": "insight",
+    "text": "And that number? It changed everything.",
+    "path": "heygen/nac/nac_rev_001.mp4"
+  },
+  {
+    "id": "nac_rev_002",
+    "type": "heygen",
+    "character": "nac",
+    "category": "reveal",
+    "emotion": "tension",
+    "text": "This is the exact moment the system flagged the risk.",
+    "path": "heygen/nac/nac_rev_002.mp4"
+  },
+  {
+    "id": "nac_rev_003",
+    "type": "heygen",
+    "character": "nac",
+    "category": "reveal",
+    "emotion": "excitement",
+    "text": "The signal was right. The timing was not. Here is why.",
+    "path": "heygen/nac/nac_rev_003.mp4"
+  },
+  {
+    "id": "nac_rev_004",
+    "type": "heygen",
+    "character": "nac",
+    "category": "reveal",
+    "emotion": "insight",
+    "text": "The P and L curve tells the whole story.",
+    "path": "heygen/nac/nac_rev_004.mp4"
+  },
+  {
+    "id": "nac_rev_005",
+    "type": "heygen",
+    "character": "nac",
+    "category": "reveal",
+    "emotion": "insight",
+    "text": "The equity curve does not lie.",
+    "path": "heygen/nac/nac_rev_005.mp4"
+  },
+  {
+    "id": "nac_rev_006",
+    "type": "heygen",
+    "character": "nac",
+    "category": "reveal",
+    "emotion": "tension",
+    "text": "This is the exact moment risk management made the difference.",
+    "path": "heygen/nac/nac_rev_006.mp4"
+  },
+  {
+    "id": "nac_react_001",
+    "type": "heygen",
+    "character": "nac",
+    "category": "react",
+    "emotion": "focus",
+    "text": "When news like this hits, the algorithm responds in seconds.",
+    "path": "heygen/nac/nac_react_001.mp4"
+  },
+  {
+    "id": "nac_react_002",
+    "type": "heygen",
+    "character": "nac",
+    "category": "react",
+    "emotion": "clarity",
+    "text": "This changes the momentum landscape completely.",
+    "path": "heygen/nac/nac_react_002.mp4"
+  },
+  {
+    "id": "nac_react_003",
+    "type": "heygen",
+    "character": "nac",
+    "category": "react",
+    "emotion": "tension",
+    "text": "Most algo systems would have missed this. Mine did not.",
+    "path": "heygen/nac/nac_react_003.mp4"
+  },
+  {
+    "id": "nac_react_004",
+    "type": "heygen",
+    "character": "nac",
+    "category": "react",
+    "emotion": "focus",
+    "text": "The Fed announcement hit. The bot was already positioned.",
+    "path": "heygen/nac/nac_react_004.mp4"
+  },
+  {
+    "id": "nac_react_005",
+    "type": "heygen",
+    "character": "nac",
+    "category": "react",
+    "emotion": "insight",
+    "text": "Earnings beat. The algorithm caught the pre-market signal.",
+    "path": "heygen/nac/nac_react_005.mp4"
+  },
+  {
+    "id": "nac_react_006",
+    "type": "heygen",
+    "character": "nac",
+    "category": "react",
+    "emotion": "tension",
+    "text": "Market opened gap down. The bot skipped three signals. That was correct.",
+    "path": "heygen/nac/nac_react_006.mp4"
+  },
+  {
+    "id": "nac_cta_001",
+    "type": "heygen",
+    "character": "nac",
+    "category": "cta",
+    "emotion": "confidence",
+    "text": "Subscribe to NacArtha. I trade every day. You should know what I know. Follow the algorithm. See you tomorrow.",
+    "path": "heygen/nac/nac_cta_001.mp4"
+  },
+  {
+    "id": "nac_cta_002",
+    "type": "heygen",
+    "character": "nac",
+    "category": "cta",
+    "emotion": "confidence",
+    "text": "Follow NacArtha. The algorithm runs twenty-four seven. So should your knowledge.",
+    "path": "heygen/nac/nac_cta_002.mp4"
+  },
+  {
+    "id": "nac_cta_003",
+    "type": "heygen",
+    "character": "nac",
+    "category": "cta",
+    "emotion": "confidence",
+    "text": "That is all for today. Follow NacArtha for the next trade.",
+    "path": "heygen/nac/nac_cta_003.mp4"
+  },
+  {
+    "id": "nac_cta_004",
+    "type": "heygen",
+    "character": "nac",
+    "category": "cta",
+    "emotion": "excitement",
+    "text": "The algorithm runs every market day. Be here when it matters.",
+    "path": "heygen/nac/nac_cta_004.mp4"
+  },
+  {
+    "id": "nac_norm_001",
+    "type": "heygen",
+    "character": "nac",
+    "category": "normal",
+    "emotion": "clarity",
+    "text": "Here is what happened next.",
+    "path": "heygen/nac/nac_norm_001.mp4"
+  },
+  {
+    "id": "nac_norm_002",
+    "type": "heygen",
+    "character": "nac",
+    "category": "normal",
+    "emotion": "focus",
+    "text": "Let me pull up the chart.",
+    "path": "heygen/nac/nac_norm_002.mp4"
+  },
+  {
+    "id": "nac_norm_003",
+    "type": "heygen",
+    "character": "nac",
+    "category": "normal",
+    "emotion": "insight",
+    "text": "The pattern was clear in hindsight.",
+    "path": "heygen/nac/nac_norm_003.mp4"
+  },
+  {
+    "id": "nac_norm_004",
+    "type": "heygen",
+    "character": "nac",
+    "category": "normal",
+    "emotion": "focus",
+    "text": "Watch what happens next.",
+    "path": "heygen/nac/nac_norm_004.mp4"
+  },
+  {
+    "id": "nac_norm_005",
+    "type": "heygen",
+    "character": "nac",
+    "category": "normal",
+    "emotion": "clarity",
+    "text": "Now let me show you the result.",
+    "path": "heygen/nac/nac_norm_005.mp4"
+  },
+  {
+    "id": "nac_norm_006",
+    "type": "heygen",
+    "character": "nac",
+    "category": "normal",
+    "emotion": "focus",
+    "text": "This part is important. Pay attention.",
+    "path": "heygen/nac/nac_norm_006.mp4"
+  },
+  {
+    "id": "nac_norm_007",
+    "type": "heygen",
+    "character": "nac",
+    "category": "normal",
+    "emotion": "insight",
+    "text": "The data makes it clear.",
+    "path": "heygen/nac/nac_norm_007.mp4"
+  },
+  {
+    "id": "nac_norm_008",
+    "type": "heygen",
+    "character": "nac",
+    "category": "normal",
+    "emotion": "clarity",
+    "text": "One more thing before we wrap up.",
+    "path": "heygen/nac/nac_norm_008.mp4"
+  },
+  {
+    "id": "nac_norm_009",
+    "type": "heygen",
+    "character": "nac",
+    "category": "normal",
+    "emotion": "focus",
+    "text": "Let me break this down step by step.",
+    "path": "heygen/nac/nac_norm_009.mp4"
+  },
+  {
+    "id": "nac_norm_010",
+    "type": "heygen",
+    "character": "nac",
+    "category": "normal",
+    "emotion": "clarity",
+    "text": "The setup was there. Here is what the bot saw.",
+    "path": "heygen/nac/nac_norm_010.mp4"
+  },
+  {
+    "id": "veo_trade_001",
+    "type": "veo",
+    "category": "trading",
+    "prompt": "Cinematic slow push-in toward Bloomberg terminal array, gold and electric-blue market data cascading on screens, dark luxury hedge-fund trading room, city skyline glowing through floor-to-ceiling glass at night, photorealistic, 4K",
+    "path": "veo/trading/veo_trade_001.mp4"
+  },
+  {
+    "id": "veo_trade_002",
+    "type": "veo",
+    "category": "trading",
+    "prompt": "Close-up of trading screens with live candlestick charts ticking in real time, cursor moving over red and green candles, warm gold light reflecting on glass, dark professional trading room",
+    "path": "veo/trading/veo_trade_002.mp4"
+  },
+  {
+    "id": "veo_trade_003",
+    "type": "veo",
+    "category": "trading",
+    "prompt": "Slow aerial tilt-down revealing dark luxury trading command center, multiple glowing screens with financial data, city lights visible through panoramic windows at night, cinematic",
+    "path": "veo/trading/veo_trade_003.mp4"
+  },
+  {
+    "id": "veo_trade_004",
+    "type": "veo",
+    "category": "trading",
+    "prompt": "Hands typing rapidly on mechanical keyboard, Bloomberg terminal glow reflecting off fingertips, dark trading desk, gold and electric-blue ambient light, slow cinematic dolly",
+    "path": "veo/trading/veo_trade_004.mp4"
+  },
+  {
+    "id": "veo_trade_005",
+    "type": "veo",
+    "category": "trading",
+    "prompt": "Financial data visualization: numbers and charts flowing across multiple screens in a dark room, electric blue and gold light pulses, cinematic camera drift, professional trading environment",
+    "path": "veo/trading/veo_trade_005.mp4"
+  },
+  {
+    "id": "veo_trade_006",
+    "type": "veo",
+    "category": "trading",
+    "prompt": "Slow pan across empty luxury trading room at night, three curved monitors showing live market data in gold and blue, city skyline shimmering outside glass walls, atmospheric fog, cinematic",
+    "path": "veo/trading/veo_trade_006.mp4"
+  },
+  {
+    "id": "veo_trade_007",
+    "type": "veo",
+    "category": "trading",
+    "prompt": "Extreme close-up of stock ticker symbols scrolling across a dark screen, red and green numbers updating in real time, shallow depth of field, gold light bokeh in background",
+    "path": "veo/trading/veo_trade_007.mp4"
+  },
+  {
+    "id": "veo_class_001",
+    "type": "veo",
+    "category": "classroom",
+    "prompt": "Slow zoom into a glass whiteboard with RSI and EMA financial formulas written in marker, dark modern meeting room, focused overhead spotlight, cinematic depth of field",
+    "path": "veo/classroom/veo_class_001.mp4"
+  },
+  {
+    "id": "veo_class_002",
+    "type": "veo",
+    "category": "classroom",
+    "prompt": "Overhead shot slowly rotating over a trading desk with open notebook, printed candlestick charts, laptop showing Python code, warm desk lamp, cinematic",
+    "path": "veo/classroom/veo_class_002.mp4"
+  },
+  {
+    "id": "veo_class_003",
+    "type": "veo",
+    "category": "classroom",
+    "prompt": "Dark luxury seminar room, empty glass table with Bloomberg terminal visible in background glowing blue and gold, slow dolly forward, cinematic atmosphere",
+    "path": "veo/classroom/veo_class_003.mp4"
+  },
+  {
+    "id": "stu_q_001",
+    "type": "heygen",
+    "character": "student",
+    "category": "question",
+    "emotion": "curiosity",
+    "text": "But why did the bot skip that trade?",
+    "path": "heygen/student/stu_q_001.mp4"
+  },
+  {
+    "id": "stu_q_003",
+    "type": "heygen",
+    "character": "student",
+    "category": "question",
+    "emotion": "curiosity",
+    "text": "How does the algorithm decide when to sell?",
+    "path": "heygen/student/stu_q_003.mp4"
+  },
+  {
+    "id": "stu_q_005",
+    "type": "heygen",
+    "character": "student",
+    "category": "question",
+    "emotion": "curiosity",
+    "text": "What is a momentum score exactly?",
+    "path": "heygen/student/stu_q_005.mp4"
+  },
+  {
+    "id": "stu_q_007",
+    "type": "heygen",
+    "character": "student",
+    "category": "question",
+    "emotion": "curiosity",
+    "text": "So the bot never second-guesses itself?",
+    "path": "heygen/student/stu_q_007.mp4"
+  },
+  {
+    "id": "stu_q_009",
+    "type": "heygen",
+    "character": "student",
+    "category": "question",
+    "emotion": "curiosity",
+    "text": "Does the bot ever hold positions overnight?",
+    "path": "heygen/student/stu_q_009.mp4"
+  },
+  {
+    "id": "stu_q_011",
+    "type": "heygen",
+    "character": "student",
+    "category": "question",
+    "emotion": "curiosity",
+    "text": "Can retail traders replicate this kind of system?",
+    "path": "heygen/student/stu_q_011.mp4"
+  },
+  {
+    "id": "stu_react_001",
+    "type": "heygen",
+    "character": "student",
+    "category": "normal",
+    "emotion": "focus",
+    "text": "Okay. That makes sense now.",
+    "path": "heygen/student/stu_react_001.mp4"
+  },
+  {
+    "id": "stu_react_003",
+    "type": "heygen",
+    "character": "student",
+    "category": "normal",
+    "emotion": "insight",
+    "text": "I never thought about it that way.",
+    "path": "heygen/student/stu_react_003.mp4"
+  },
+  {
+    "id": "stu_react_005",
+    "type": "heygen",
+    "character": "student",
+    "category": "normal",
+    "emotion": "insight",
+    "text": "So consistency matters more than any single trade.",
+    "path": "heygen/student/stu_react_005.mp4"
+  },
+  {
+    "id": "stu_react_007",
+    "type": "heygen",
+    "character": "student",
+    "category": "normal",
+    "emotion": "insight",
+    "text": "So discipline is built directly into the code itself.",
+    "path": "heygen/student/stu_react_007.mp4"
+  },
+  {
+    "id": "stu_q_002",
+    "type": "heygen",
+    "character": "student_photo",
+    "category": "question",
+    "emotion": "curiosity",
+    "text": "What does the RSI number actually mean?",
+    "path": "heygen/student/stu_q_002.mp4"
+  },
+  {
+    "id": "stu_q_004",
+    "type": "heygen",
+    "character": "student_photo",
+    "category": "question",
+    "emotion": "curiosity",
+    "text": "Wait. So the bot refused the profit on purpose?",
+    "path": "heygen/student/stu_q_004.mp4"
+  },
+  {
+    "id": "stu_q_006",
+    "type": "heygen",
+    "character": "student_photo",
+    "category": "question",
+    "emotion": "curiosity",
+    "text": "How is this different from regular technical analysis?",
+    "path": "heygen/student/stu_q_006.mp4"
+  },
+  {
+    "id": "stu_q_008",
+    "type": "heygen",
+    "character": "student_photo",
+    "category": "question",
+    "emotion": "curiosity",
+    "text": "What happens when two signals contradict each other?",
+    "path": "heygen/student/stu_q_008.mp4"
+  },
+  {
+    "id": "stu_q_010",
+    "type": "heygen",
+    "character": "student_photo",
+    "category": "question",
+    "emotion": "curiosity",
+    "text": "How does news affect the algorithm's decisions?",
+    "path": "heygen/student/stu_q_010.mp4"
+  },
+  {
+    "id": "stu_q_012",
+    "type": "heygen",
+    "character": "student_photo",
+    "category": "question",
+    "emotion": "curiosity",
+    "text": "Why do most algo traders fail?",
+    "path": "heygen/student/stu_q_012.mp4"
+  },
+  {
+    "id": "stu_react_002",
+    "type": "heygen",
+    "character": "student_photo",
+    "category": "normal",
+    "emotion": "excitement",
+    "text": "So the system knew before the price moved?",
+    "path": "heygen/student/stu_react_002.mp4"
+  },
+  {
+    "id": "stu_react_004",
+    "type": "heygen",
+    "character": "student_photo",
+    "category": "normal",
+    "emotion": "clarity",
+    "text": "That is actually simpler than I expected.",
+    "path": "heygen/student/stu_react_004.mp4"
+  },
+  {
+    "id": "stu_react_006",
+    "type": "heygen",
+    "character": "student_photo",
+    "category": "normal",
+    "emotion": "excitement",
+    "text": "I had no idea algorithms worked at this speed.",
+    "path": "heygen/student/stu_react_006.mp4"
+  },
+  {
+    "id": "stu_react_008",
+    "type": "heygen",
+    "character": "student_photo",
+    "category": "normal",
+    "emotion": "insight",
+    "text": "So every loss is a calculated decision, not a failure.",
+    "path": "heygen/student/stu_react_008.mp4"
+  },
+  {
+    "id": "nac_veo_001",
+    "type": "veo_nac",
+    "pose": "desk_study",
+    "path": "veo/nac/nac_veo_001.mp4"
+  },
+  {
+    "id": "nac_veo_002",
+    "type": "veo_nac",
+    "pose": "desk_typing",
+    "path": "veo/nac/nac_veo_002.mp4"
+  },
+  {
+    "id": "nac_veo_003",
+    "type": "veo_nac",
+    "pose": "camera_direct",
+    "path": "veo/nac/nac_veo_003.mp4"
+  },
+  {
+    "id": "veo_class_004",
+    "type": "veo",
+    "category": "classroom",
+    "prompt": "Close-up of a hand drawing a stock chart on glass whiteboard with marker, formula being written step by step, dark academic atmosphere, warm focused light",
+    "path": "veo/classroom/veo_class_004.mp4"
+  },
+  {
+    "id": "veo_class_005",
+    "type": "veo",
+    "category": "classroom",
+    "prompt": "Laptop screen showing algorithmic trading Python code with green syntax highlighting, fingers scrolling through code, dark desk, shallow depth of field, cinematic",
+    "path": "veo/classroom/veo_class_005.mp4"
+  },
+  {
+    "id": "veo_trade_008",
+    "type": "veo",
+    "category": "trading",
+    "prompt": "Slow tilt-up from dark trading desk to panoramic window revealing glowing city skyline at night, Bloomberg terminal reflected in glass, cinematic atmospheric haze",
+    "path": "veo/trading/veo_trade_008.mp4"
+  },
+  {
+    "id": "run_nac_001",
+    "type": "veo_nac",
+    "pose": "desk_lean",
+    "path": "veo/nac/run_nac_001.mp4"
+  },
+  {
+    "id": "run_nac_002",
+    "type": "veo_nac",
+    "pose": "camera_direct",
+    "path": "veo/nac/run_nac_002.mp4"
+  },
+  {
+    "id": "run_nac_003",
+    "type": "veo_nac",
+    "pose": "pointing",
+    "path": "veo/nac/run_nac_003.mp4"
+  },
+  {
+    "id": "run_nac_004",
+    "type": "veo_nac",
+    "pose": "arms_crossed",
+    "path": "veo/nac/run_nac_004.mp4"
+  },
+  {
+    "id": "run_nac_005",
+    "type": "veo_nac",
+    "pose": "typing_fast",
+    "path": "veo/nac/run_nac_005.mp4"
+  },
+  {
+    "id": "run_nac_006",
+    "type": "veo_nac",
+    "pose": "pnl_check",
+    "path": "veo/nac/run_nac_006.mp4"
+  },
+  {
+    "id": "run_nac_007",
+    "type": "veo_nac",
+    "pose": "thinking",
+    "path": "veo/nac/run_nac_007.mp4"
+  },
+  {
+    "id": "run_nac_008",
+    "type": "veo_nac",
+    "pose": "surprised",
+    "path": "veo/nac/run_nac_008.mp4"
+  },
+  {
+    "id": "run_nac_009",
+    "type": "veo_nac",
+    "pose": "wide_shot",
+    "path": "veo/nac/run_nac_009.mp4"
+  },
+  {
+    "id": "run_nac_010",
+    "type": "veo_nac",
+    "pose": "window_gaze",
+    "path": "veo/nac/run_nac_010.mp4"
+  },
+  {
+    "id": "run_nac_011",
+    "type": "veo_nac",
+    "pose": "screen_scan",
+    "path": "veo/nac/run_nac_011.mp4"
+  },
+  {
+    "id": "run_nac_012",
+    "type": "veo_nac",
+    "pose": "execute",
+    "path": "veo/nac/run_nac_012.mp4"
+  },
+  {
+    "id": "run_nac_013",
+    "type": "veo_nac",
+    "pose": "dismiss_signal",
+    "path": "veo/nac/run_nac_013.mp4"
+  },
+  {
+    "id": "run_nac_014",
+    "type": "veo_nac",
+    "pose": "close_face",
+    "path": "veo/nac/run_nac_014.mp4"
+  },
+  {
+    "id": "run_nac_015",
+    "type": "veo_nac",
+    "pose": "camera_point",
+    "path": "veo/nac/run_nac_015.mp4"
+  },
+  {
+    "id": "run_nac_016",
+    "type": "veo_nac",
+    "pose": "patient_wait",
+    "path": "veo/nac/run_nac_016.mp4"
+  },
+  {
+    "id": "run_nac_017",
+    "type": "veo_nac",
+    "pose": "satisfied",
+    "path": "veo/nac/run_nac_017.mp4"
+  }
+]
