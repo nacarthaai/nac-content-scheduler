@@ -29,7 +29,9 @@ log = logging.getLogger("scheduler")
 NY_TZ      = ZoneInfo("America/New_York")
 _ALL_LANGS = ["en", "hi", "te"]
 
-_pipeline_lock = threading.Lock()
+_pipeline_lock  = threading.Lock()
+_startup_time   = datetime.now()   # recorded at module load = container start time
+_STARTUP_GUARD  = 300              # 5 minutes — never fire within this window of a deploy
 
 
 def _mark_lang_done(lang: str):
@@ -37,6 +39,16 @@ def _mark_lang_done(lang: str):
 
 
 def run_pipeline():
+    # Deploy guard: if the container just started (deploy), skip this cron fire
+    uptime_secs = (datetime.now() - _startup_time).total_seconds()
+    if uptime_secs < _STARTUP_GUARD:
+        log.warning(
+            f"Cron fired {uptime_secs:.0f}s after container start — "
+            f"likely a deploy restart. SKIPPING to protect 4pm-only rule. "
+            f"Next run: tomorrow 4:00 PM ET."
+        )
+        return
+
     log.info("=== Firing NacArtha pipeline (4 PM cron) ===")
     if not _pipeline_lock.acquire(blocking=False):
         log.warning("Pipeline already running — skipping")
@@ -171,13 +183,14 @@ scheduler.add_job(
     run_pipeline,
     CronTrigger(hour=16, minute=0, timezone="America/New_York"),
     max_instances=1,
-    misfire_grace_time=60,   # tight window — if missed, skip; don't fire late
+    misfire_grace_time=None,  # never fire a missed job — deploy at 4pm = skip, wait tomorrow
 )
 
 _start_dashboard_server()
 
 now_ny = datetime.now(NY_TZ)
 log.info(f"NacArtha Scheduler — pipeline fires ONLY at 4:00 PM ET daily | Started at {now_ny.strftime('%H:%M')} ET")
+log.info("Trigger rule: 4PM cron + manual /fire only. Missed jobs are SKIPPED — no catch-up.")
 
 try:
     scheduler.start()

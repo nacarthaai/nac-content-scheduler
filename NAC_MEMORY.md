@@ -201,4 +201,21 @@ If not: Generate additional images before rendering.
 
 Never publish narration-only videos.
 
+---
+
+## Pipeline Trigger Rule ⭐ STARRED
+
+Videos must ONLY be generated and posted at:
+1. 4:00 PM EST daily (automatic cron)
+2. Manual /fire endpoint trigger only
+
+NEVER trigger on:
+- Container restart
+- Railway deployment
+- Code push
+- Any other automated event
+
+If a deploy happens at 4pm and the job is missed — SKIP IT. Do not fire late.
+The next scheduled run is tomorrow at 4pm. No catch-up runs.
+
 END OF NAC MEMORY FILE
