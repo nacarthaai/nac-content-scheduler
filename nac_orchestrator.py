@@ -30,9 +30,10 @@ from engines.video_assembler  import VideoAssembler
 from engines.thumbnail_engine import ThumbnailEngine
 from engines.music_engine     import MusicEngine
 from engines.upload_engine    import UploadEngine
-from engines.library_engine   import LibraryEngine
-from engines.chart_engine     import ChartEngine
-from engines.synclabs_engine  import SyncLabsEngine
+from engines.library_engine            import LibraryEngine
+from engines.chart_engine              import ChartEngine
+from engines.synclabs_engine           import SyncLabsEngine
+from engines.visual_intelligence_engine import VisualIntelligenceEngine
 
 logging.basicConfig(
     level=logging.INFO,
@@ -75,6 +76,7 @@ def main(langs: list = None, on_lang_done=None):
     library          = LibraryEngine()
     charts           = ChartEngine()
     synclabs         = SyncLabsEngine()
+    visual_intel     = VisualIntelligenceEngine()
     uploader         = UploadEngine(
         client_id=os.environ.get("YOUTUBE_CLIENT_ID", ""),
         client_secret=os.environ.get("YOUTUBE_CLIENT_SECRET", ""),
@@ -109,7 +111,7 @@ def main(langs: list = None, on_lang_done=None):
     log.info(f"Building visuals for type={video_type}…")
     scene_visuals = _build_visuals(
         en_script["long_scenes"], run_dir, video_type,
-        library, charts, topic,
+        library, charts, topic, visual_intel,
     )
 
     # ── 4. Per-language pipeline ──────────────────────────────────────────────
@@ -279,8 +281,9 @@ def _build_visuals(
     library: LibraryEngine,
     chart_eng: ChartEngine,
     topic: dict,
+    visual_intel: "VisualIntelligenceEngine | None" = None,
 ) -> dict:
-    """Returns {scene_id: {image_path, chart_path}} for all scenes."""
+    """Returns {scene_id: {image_path, chart_path, extra_visuals}} for all scenes."""
     visuals = {}
     images_dir = run_dir / "images"
     charts_dir = run_dir / "charts"
@@ -352,7 +355,30 @@ def _build_visuals(
                 bg     = library.get_background(bg_cat)
             image_path = str(bg) if bg else None
 
-        visuals[sid] = {"image_path": image_path, "chart_path": chart_path}
+        # ── NAC Memory Rule: get contextual visuals for every scene ─────────
+        extra_visuals = []
+        if visual_intel:
+            narration = scene.get("narration", "")
+            news_headline = topic.get("news_headline", topic.get("title", ""))
+            intel_dir = images_dir / f"intel_{sid}"
+            try:
+                extra_visuals = visual_intel.get_scene_visuals(
+                    narration=narration,
+                    scene_type=scene_type,
+                    out_dir=intel_dir,
+                    scene_id=str(sid),
+                    news_headline=news_headline,
+                    max_images=3,
+                )
+                extra_visuals = [str(p) for p in extra_visuals if p and Path(p).exists()]
+            except Exception as e:
+                log.warning(f"  Visual intel scene {sid}: {e}")
+
+        visuals[sid] = {
+            "image_path":    image_path,
+            "chart_path":    chart_path,
+            "extra_visuals": extra_visuals,
+        }
 
     return visuals
 
