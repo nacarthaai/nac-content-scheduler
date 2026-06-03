@@ -191,7 +191,7 @@ class VideoAssembler:
             "ffmpeg", "-y",
             "-i", str(long_path),
             "-t", str(SHORT_DURATION),
-            "-vf", "scale=1920:1080,crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920",
+            "-vf", "scale=1920:1080,crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=720:1280",
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
             "-c:a", "aac", "-b:a", "128k",
             str(short_path),
