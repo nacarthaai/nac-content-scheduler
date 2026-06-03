@@ -72,7 +72,7 @@ PACE RULES:
   normal → everything else.
 
 SCENE TYPE RULES — MANDATORY distribution across 12 scenes:
-  scene_type must be one of: "nac_face" | "illustrated"
+  scene_type must be one of: "nac_face" | "illustrated" | "student"
   DO NOT use "chart" scene_type — no charts, no stock images in any scene.
   chart_key must be null for ALL scenes.
 
@@ -80,9 +80,12 @@ SCENE TYPE RULES — MANDATORY distribution across 12 scenes:
     → ALWAYS scene 1 (hook) and scene 12 (cta).
     → 3-4 more scenes at key emotional moments (hero shot, reveal reaction, etc.)
 
-  illustrated (5-6 scenes): Cinematic trading environment — no NAC character needed.
+  illustrated (4-5 scenes): Cinematic trading environment — no NAC character needed.
     → Markets, trading terminals, city skyline, data flows, abstract financial imagery.
     → NO stock market charts, NO price graphs, NO candlestick charts in visual_prompt.
+
+  student (0-2 scenes): EDUCATIONAL VIDEOS ONLY — student character asking questions.
+    → Never use in bot, recap, or news videos.
 
 INTRO RULE (scene 1, pace: hook, scene_type: nac_face) — MANDATORY:
   Narration MUST open word-for-word: "Hey. Nac here. Welcome to my trading world."
@@ -133,10 +136,10 @@ Examples:
   "Extreme close-up of trading screen showing red and green candlestick chart, cursor hovering
   over a specific number. Warm gold reflection on glass. Dark background. Dramatic lighting."
 
-━━ chart scene visual_prompt format ━━
-"Dark trading command center background, terminal screens dimmed, empty space in lower frame
-for chart display. [Mood — tense / revealing / analytical]. Electric blue and gold ambient glow."
-(The actual chart image will be overlaid by the video assembler — just describe the background.)
+━━ student scene visual_prompt format (educational only) ━━
+"[Shot size]. Student sits across glass table, [expression/pose].
+Notebook open, pen in hand. Bloomberg terminals glowing behind NacArtha.
+[Lighting — warm gold key, blue fill from terminals]."
 
 ADDITIONAL RULES:
 - Every scene must have a DIFFERENT composition from the previous
@@ -174,9 +177,9 @@ OUTPUT: Return ONLY valid JSON matching this schema:
 Episode guidance:
 - Scene 1 (hook): Open with INTRO RULE phrase. Then: the single most tension-filled number or decision. No warmup.
 - Scene 2-3: Plant a specific open loop — a number or outcome teased but not yet revealed
-- Scenes 4-8: What happened → signals → what the bot did/refused → why → risk moment
-- Scene 9 (reveal): Resolve the open loop with the exact number
-- Scene 10 (cta): OUTRO RULE word-for-word
+- Scenes 4-9: What happened → signals → what the bot did/refused → why → risk moment → build tension
+- Scenes 10-11 (reveal): Resolve the open loop with the exact number, show consequence
+- Scene 12 (cta): OUTRO RULE word-for-word
 - text_overlay: every reveal scene must show a stat (P&L%, signal score, trade count, etc.)
 """
 
@@ -198,7 +201,7 @@ Episode guidance:
 - Scene 2-3: Plant open loop about the most interesting moment — tease the outcome
 - Scenes 4-8: Market open → signals scanned → trades taken/blocked → risk moments → close
 - Scene 9 (reveal): The exact number that resolves the open loop
-- Scene 10 (cta): OUTRO RULE word-for-word
+- Scene 12 (cta): OUTRO RULE word-for-word
 - Use real symbols, real numbers from recap_data above
 """
 
@@ -218,9 +221,9 @@ OUTPUT: Return ONLY valid JSON matching this schema:
 Episode guidance:
 - Scene 1 (hook): Open with INTRO RULE phrase. Then the week's single most dramatic outcome.
 - Scene 2: Plant open loop about the worst single moment — tease it
-- Scenes 4-8: Day-by-day highlights → best trade → worst trade → risk protection → lesson
-- Scene 9 (reveal): Resolve the open loop — the exact worst moment number
-- Scene 10 (cta): OUTRO RULE word-for-word
+- Scenes 4-9: Day-by-day highlights → best trade → worst trade → risk protection → lesson → build tension
+- Scenes 10-11 (reveal): Resolve the open loop — the exact worst moment number and its impact
+- Scene 12 (cta): OUTRO RULE word-for-word
 - text_overlay: weekly P&L%, win rate, Sharpe, drawdown — every reveal scene must show the exact stat
 """
 
@@ -243,9 +246,9 @@ OUTPUT: Return ONLY valid JSON matching this schema:
 Episode guidance:
 - Scene 1 (hook): Open with INTRO RULE phrase. Then the single most alarming implication for algo traders.
 - Scene 2-3: Plant open loop — "most traders won't see what this does to momentum signals until..."
-- Scenes 4-8: What happened → exact market impact → signal effects → what my bot does/did → lesson
-- Scene 9 (reveal): The exact signal or stat that resolves the open loop
-- Scene 10 (cta): OUTRO RULE word-for-word
+- Scenes 4-9: What happened → exact market impact → signal effects → what my bot does/did → lesson → tension
+- Scenes 10-11 (reveal): The exact signal or stat that resolves the open loop
+- Scene 12 (cta): OUTRO RULE word-for-word
 - text_overlay: numbers from the news + market impact stats on every reveal scene
 """
 
@@ -269,9 +272,9 @@ Episode guidance:
 - Scene 1 (hook): Open with INTRO RULE phrase. Then a concrete failure or surprising result.
   Example: "Hey. Nac here. Welcome to my trading world. I lost $340 ignoring this one number."
 - Scene 2-3: Plant open loop — "the formula is simpler than you think — I'll write it out exactly"
-- Scenes 4-8: Problem → concept → math/formula → how I use it → student asks a question → NacArtha explains at whiteboard
-- Scene 9 (reveal): The exact formula/result that resolves the open loop — shown on whiteboard
-- Scene 10 (cta): OUTRO RULE word-for-word
+- Scenes 4-9: Problem → concept → math/formula → how I use it → student asks (student scene) → NacArtha explains → build understanding
+- Scenes 10-11 (reveal): The exact formula/result that resolves the open loop — shown on whiteboard, student reaction
+- Scene 12 (cta): OUTRO RULE word-for-word
 - Use real library names, formulas, exact parameters (RSI(14), ATR(14), kelly = edge/odds)
 - Student scenes: MUST use the EDUCATIONAL SCENE visual template from VISUAL PROMPT RULES
 - text_overlay: exact formula or code snippet on every reveal and whiteboard scene
