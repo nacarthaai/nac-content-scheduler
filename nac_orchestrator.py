@@ -159,14 +159,14 @@ def main(langs: list = None, on_lang_done=None):
                     cta_text=en_script.get("cta_text", ""),
                 )
                 if not long_path.exists():
-                    log.warning(f"  [en] Veo-native failed (library empty?) — falling back to TTS assembly")
-                    scenes = _generate_audio(en_script["long_scenes"], lang_dir / "audio", voice_engine, lang)
-                    for s in scenes:
+                    log.warning(f"  [en] Veo-native failed (library empty?) — falling back to TTS assembly (reusing cached audio)")
+                    # Reuse audio_scenes already generated above — no new HeyGen calls
+                    for s in audio_scenes:
                         v = scene_visuals.get(s["id"], {})
                         s["image_path"] = v.get("image_path", str(_black_image(run_dir)))
                         s["chart_path"] = v.get("chart_path")
                         s["text_overlay"] = None
-                    assembler.assemble(scenes, long_path, "landscape", music_path)
+                    assembler.assemble(audio_scenes, long_path, "landscape", music_path)
                 # Upload EN video and get public URL for video_translate
                 en_video_url = _upload_for_translate(long_path)
                 log.info(f"  [en] Public URL for translate: {en_video_url[:60] if en_video_url else 'FAILED'}…")

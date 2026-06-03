@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Optional
 
 import requests
+from PIL import Image, ImageDraw, ImageFont
 
 log = logging.getLogger("visual_intelligence")
 
@@ -28,6 +29,19 @@ _TICKER_RE = re.compile(
     r'earnings|revenue|gap|signal|position|trade|chart|moved|up|down|%|'
     r'resistance|support|breakout|oversold|overbought))',
 )
+# ── Forex pair mapping ─────────────────────────────────────────────────────────
+_FOREX_PAIRS = {
+    "eurusd": "EURUSD=X", "eur/usd": "EURUSD=X", "euro": "EURUSD=X",
+    "gbpusd": "GBPUSD=X", "gbp/usd": "GBPUSD=X", "pound": "GBPUSD=X",
+    "usdjpy": "USDJPY=X", "usd/jpy": "USDJPY=X", "yen": "USDJPY=X",
+    "audusd": "AUDUSD=X", "aud/usd": "AUDUSD=X",
+    "usdcad": "USDCAD=X", "usd/cad": "USDCAD=X",
+    "usdchf": "USDCHF=X", "usd/chf": "USDCHF=X", "franc": "USDCHF=X",
+    "nzdusd": "NZDUSD=X", "nzd/usd": "NZDUSD=X",
+    "xauusd": "GC=F",     "gold": "GC=F",
+    "xagusd": "SI=F",     "silver": "SI=F",
+}
+
 _KNOWN_TICKERS = {
     "NVDA","AAPL","MSFT","TSLA","AMZN","GOOGL","GOOG","META","AMD","INTC",
     "MU","QCOM","AVGO","ARM","SMCI","PLTR","SOFI","RIVN","LCID","NIO",
@@ -134,7 +148,10 @@ class VisualIntelligenceEngine:
         for ticker in tickers[:2]:
             chart = self._yfinance_chart(ticker, out_dir, scene_id)
             if chart:
-                visuals.append(chart)
+                framed = self._wrap_in_window(
+                    chart, out_dir / f"{chart.stem}_win.jpg", label=f"{ticker} · 30-Day Chart"
+                )
+                visuals.append(framed)
                 if len(visuals) >= max_images:
                     return visuals
 
@@ -142,33 +159,44 @@ class VisualIntelligenceEngine:
         if is_news_type and news_headline and len(visuals) < max_images:
             img = self._news_image(news_headline, out_dir, scene_id)
             if img:
-                visuals.append(img)
+                framed = self._wrap_in_window(
+                    img, out_dir / f"{scene_id}_news_win.jpg", label="Breaking News"
+                )
+                visuals.append(framed)
 
-        # 3. Company product image — for news + educational only
-        if not is_bot_type and len(visuals) < max_images:
+        # 3. Company product image — for all video types when company is mentioned
+        if len(visuals) < max_images:
             for company, query in _COMPANY_IMAGES.items():
                 if company in text:
                     img = self._pexels_image(query, out_dir, f"{scene_id}_co_{company[:6]}")
                     if img:
-                        visuals.append(img)
+                        framed = self._wrap_in_window(
+                            img, out_dir / f"{scene_id}_co_{company[:6]}_win.jpg",
+                            label=company.title()
+                        )
+                        visuals.append(framed)
                     break
 
-        # 4. Strategy/concept image — educational only (Pexels diagrams)
-        if video_type == "educational" and len(visuals) < max_images:
+        # 4. Strategy/concept image — whenever a strategy keyword is in narration
+        if len(visuals) < max_images:
             for keyword, query in _STRATEGY_KEYWORDS.items():
                 if keyword in text:
                     img = self._pexels_image(query, out_dir, f"{scene_id}_strat_{keyword[:6]}")
                     if img:
-                        visuals.append(img)
+                        framed = self._wrap_in_window(
+                            img, out_dir / f"{scene_id}_strat_{keyword[:6]}_win.jpg",
+                            label=keyword.title()
+                        )
+                        visuals.append(framed)
                     break
 
         # 5. For bot videos: if no stock chart found, return empty
-        # (Runway/Veo library clip will be used instead — no marketing images)
-        if is_bot_type:
+        # (Runway/Veo library clip will be used instead)
+        if is_bot_type and not visuals:
             return visuals
 
         # 6. Generic fallback for non-bot videos only
-        if not visuals:
+        if not visuals and not is_bot_type:
             fallback_query = {
                 "nac_face":   "trading terminal bloomberg financial dark",
                 "illustrated":"stock market financial trading technology",
@@ -176,23 +204,86 @@ class VisualIntelligenceEngine:
             }.get(scene_type, "financial market trading technology")
             img = self._pexels_image(fallback_query, out_dir, f"{scene_id}_fallback")
             if img:
-                visuals.append(img)
+                framed = self._wrap_in_window(
+                    img, out_dir / f"{scene_id}_fallback_win.jpg"
+                )
+                visuals.append(framed)
 
         return visuals
+
+    # ── Desktop window framing ─────────────────────────────────────────────────
+
+    def _wrap_in_window(self, img_path: Path, out_path: Path, label: str = "") -> Path:
+        """Wrap an image in a macOS-style dark window frame for clear on-screen display."""
+        try:
+            img = Image.open(img_path).convert("RGB")
+            iw, ih = img.size
+
+            # Window dimensions
+            pad   = 12
+            bar_h = 32
+            total_w = iw + pad * 2
+            total_h = ih + bar_h + pad * 2
+
+            # Dark background canvas
+            canvas = Image.new("RGB", (total_w, total_h), (14, 14, 18))
+            draw   = ImageDraw.Draw(canvas)
+
+            # Title bar
+            draw.rectangle([0, 0, total_w, bar_h], fill=(28, 28, 32))
+
+            # Traffic light dots
+            for i, color in enumerate([(255, 95, 87), (255, 189, 46), (39, 201, 63)]):
+                cx = 12 + i * 20
+                cy = bar_h // 2
+                draw.ellipse([cx - 5, cy - 5, cx + 5, cy + 5], fill=color)
+
+            # Label in title bar
+            if label:
+                try:
+                    font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 13)
+                except Exception:
+                    font = ImageFont.load_default()
+                bb = draw.textbbox((0, 0), label, font=font)
+                lw = bb[2] - bb[0]
+                draw.text(((total_w - lw) // 2, (bar_h - 13) // 2), label,
+                          fill=(180, 180, 185), font=font)
+
+            # Paste image
+            canvas.paste(img, (pad, bar_h + pad))
+
+            # Subtle border
+            draw.rectangle([0, 0, total_w - 1, total_h - 1],
+                           outline=(50, 50, 58), width=1)
+
+            canvas.save(str(out_path), "JPEG", quality=92)
+            return out_path
+        except Exception as e:
+            log.warning(f"  Window frame failed: {e}")
+            return img_path  # fallback: return original
 
     # ── Ticker extraction ──────────────────────────────────────────────────────
 
     def _extract_tickers(self, text: str) -> list[str]:
         found = []
-        # Known tickers first (most reliable)
+        text_lower = text.lower()
+
+        # Forex pairs
+        for keyword, yf_symbol in _FOREX_PAIRS.items():
+            if keyword in text_lower and yf_symbol not in found:
+                found.append(yf_symbol)
+
+        # Known stock tickers
         for t in _KNOWN_TICKERS:
-            if re.search(rf'\b{t}\b', text):
+            if re.search(rf'\b{t}\b', text) and t not in found:
                 found.append(t)
-        # Pattern-matched tickers
+
+        # Pattern-matched stock tickers
         for m in _TICKER_RE.finditer(text):
             t = m.group(1)
             if t not in found and t not in {"I","A","AT","IT","BE","AS","AN","OR","IN","IS","TO"}:
                 found.append(t)
+
         return found[:3]
 
     # ── yfinance chart ─────────────────────────────────────────────────────────

@@ -44,18 +44,30 @@ class VoiceEngine:
 
     def generate(self, text: str, out_path: Path, lang: str = "en") -> Path:
         out_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Skip API call if audio already exists (idempotent re-runs)
+        if out_path.exists() and out_path.stat().st_size > 1024:
+            log.info(f"Voice [{lang}] cached → {out_path.name}")
+            return out_path
+
         log.info(f"Voice [{lang}] {len(text)} chars → {out_path.name}")
 
-        if self._api_key:
-            voice_id = self._voice_ids.get(lang, "")
-            if not voice_id:
-                log.warning(f"  HEYGEN_VOICE_ID_{lang.upper()} not set — using Edge TTS")
-            elif self._heygen_generate(text, out_path, voice_id, lang):
-                return out_path
-            else:
-                log.warning(f"  HeyGen failed [{lang}], falling back to Edge TTS")
+        if not self._api_key:
+            raise RuntimeError("HEYGEN_API_KEY not set — cannot generate NAC voice audio")
 
-        return self._edge_generate(text, out_path, lang)
+        voice_id = self._voice_ids.get(lang, "")
+        if not voice_id:
+            raise RuntimeError(
+                f"HEYGEN_VOICE_ID_{lang.upper()} not set — cannot generate NAC voice audio"
+            )
+
+        if self._heygen_generate(text, out_path, voice_id, lang):
+            return out_path
+
+        raise RuntimeError(
+            f"HeyGen TTS failed for [{lang}] — refusing Edge TTS fallback to protect NAC voice. "
+            f"Check HeyGen API status and voice ID {voice_id[:8]}…"
+        )
 
     def get_duration(self, mp3_path: Path) -> float:
         try:
