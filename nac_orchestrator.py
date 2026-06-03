@@ -446,19 +446,20 @@ def _generate_audio(scenes: list, out_dir: Path, voice_engine: VoiceEngine, lang
 
 
 def _upload_for_translate(video_path: Path) -> str | None:
-    """Upload video to transfer.sh and return a public URL for HeyGen video_translate."""
+    """Upload video to catbox.moe and return a public URL for HeyGen video_translate."""
     try:
         import requests as _r
         with open(video_path, "rb") as f:
-            resp = _r.put(
-                f"https://transfer.sh/{video_path.name}",
-                data=f,
-                headers={"Max-Days": "1"},
-                timeout=120,
+            resp = _r.post(
+                "https://catbox.moe/user/api.php",
+                data={"reqtype": "fileupload"},
+                files={"fileToUpload": (video_path.name, f, "video/mp4")},
+                timeout=180,
             )
-        if resp.status_code == 200:
+        if resp.status_code == 200 and resp.text.startswith("https://"):
+            log.info(f"  Uploaded for translate → {resp.text.strip()}")
             return resp.text.strip()
-        log.warning(f"  transfer.sh upload failed: {resp.status_code}")
+        log.warning(f"  catbox upload failed: {resp.status_code} {resp.text[:200]}")
         return None
     except Exception as e:
         log.warning(f"  _upload_for_translate error: {e}")
