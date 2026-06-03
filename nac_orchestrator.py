@@ -371,6 +371,7 @@ def _build_visuals(
                     scene_id=str(sid),
                     news_headline=news_headline,
                     max_images=3,
+                    video_type=video_type,
                 )
                 extra_visuals = [str(p) for p in extra_visuals if p and Path(p).exists()]
             except Exception as e:

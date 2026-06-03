@@ -113,16 +113,23 @@ class VisualIntelligenceEngine:
         scene_id: str,
         news_headline: str = "",
         max_images: int = 3,
+        video_type: str = "bot",
     ) -> list[Path]:
         """
         Return ordered list of visual paths for this scene.
-        Priority: stock chart > news image > strategy/company image > generic
+
+        Priority by video type:
+          bot/recap  → yfinance stock charts only (no marketing Pexels, no news images)
+          news       → news article image first, then company images from Pexels
+          educational → Pexels concept/strategy diagrams
         """
         out_dir.mkdir(parents=True, exist_ok=True)
         visuals: list[Path] = []
         text = (narration or "").lower()
+        is_news_type = video_type in ("news", "trending_news")
+        is_bot_type  = video_type in ("bot", "bot_performance", "daily_recap", "weekly_recap")
 
-        # 1. Stock chart — highest priority
+        # 1. Stock chart — always highest priority for any type
         tickers = self._extract_tickers(narration)
         for ticker in tickers[:2]:
             chart = self._yfinance_chart(ticker, out_dir, scene_id)
@@ -131,23 +138,14 @@ class VisualIntelligenceEngine:
                 if len(visuals) >= max_images:
                     return visuals
 
-        # 2. News image
-        if news_headline and len(visuals) < max_images:
+        # 2. News article image — ONLY for news/trending_news video type
+        if is_news_type and news_headline and len(visuals) < max_images:
             img = self._news_image(news_headline, out_dir, scene_id)
             if img:
                 visuals.append(img)
 
-        # 3. Strategy / pattern image
-        if len(visuals) < max_images:
-            for keyword, query in _STRATEGY_KEYWORDS.items():
-                if keyword in text:
-                    img = self._pexels_image(query, out_dir, f"{scene_id}_strat_{keyword[:6]}")
-                    if img:
-                        visuals.append(img)
-                    break
-
-        # 4. Company image
-        if len(visuals) < max_images:
+        # 3. Company product image — for news + educational only
+        if not is_bot_type and len(visuals) < max_images:
             for company, query in _COMPANY_IMAGES.items():
                 if company in text:
                     img = self._pexels_image(query, out_dir, f"{scene_id}_co_{company[:6]}")
@@ -155,13 +153,26 @@ class VisualIntelligenceEngine:
                         visuals.append(img)
                     break
 
-        # 5. Scene-type generic fallback
+        # 4. Strategy/concept image — educational only (Pexels diagrams)
+        if video_type == "educational" and len(visuals) < max_images:
+            for keyword, query in _STRATEGY_KEYWORDS.items():
+                if keyword in text:
+                    img = self._pexels_image(query, out_dir, f"{scene_id}_strat_{keyword[:6]}")
+                    if img:
+                        visuals.append(img)
+                    break
+
+        # 5. For bot videos: if no stock chart found, return empty
+        # (Runway/Veo library clip will be used instead — no marketing images)
+        if is_bot_type:
+            return visuals
+
+        # 6. Generic fallback for non-bot videos only
         if not visuals:
             fallback_query = {
                 "nac_face":   "trading terminal bloomberg financial dark",
                 "illustrated":"stock market financial trading technology",
                 "student":    "student learning whiteboard classroom",
-                "news":       "financial news broadcast screen",
             }.get(scene_type, "financial market trading technology")
             img = self._pexels_image(fallback_query, out_dir, f"{scene_id}_fallback")
             if img:
