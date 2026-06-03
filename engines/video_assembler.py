@@ -104,14 +104,14 @@ class VideoAssembler:
                 extra     = hook_text if i == 0 else (cta_text if i == len(scenes) - 1 else "")
                 chart_path = Path(scene["chart_path"]) if scene.get("chart_path") else None
 
-                # Trim/scale clip, keep native audio
+                # Trim/scale clip (video only — audio comes from HeyGen TTS)
                 base = tmp / f"scene_{i:03d}_base.mp4"
+                narration = scene.get("narration_path")
                 _run([
                     "ffmpeg", "-y", "-i", str(src),
                     "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},fps=30",
                     "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p",
-                    "-c:a", "aac", "-b:a", "128k",
-                    str(base),
+                    "-an", str(base),
                 ])
 
                 # Text overlay PNG
@@ -121,6 +121,7 @@ class VideoAssembler:
                 if chart_path and chart_path.exists():
                     chart_w, chart_h = int(w * 0.80), int(h * 0.38)
                     chart_x, chart_y = (w - chart_w) // 2, int(h * 0.55)
+                    vid_tmp = tmp / f"scene_{i:03d}_vid.mp4"
                     _run([
                         "ffmpeg", "-y",
                         "-i", str(base), "-i", str(png), "-i", str(chart_path),
@@ -128,18 +129,40 @@ class VideoAssembler:
                         f"[0:v][1:v]overlay=0:0[with_text];"
                         f"[2:v]scale={chart_w}:{chart_h}[chart];"
                         f"[with_text][chart]overlay={chart_x}:{chart_y}[v]",
-                        "-map", "[v]", "-map", "0:a?",
-                        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-                        "-c:a", "copy", str(scene_out),
+                        "-map", "[v]",
+                        "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-an",
+                        str(vid_tmp),
                     ])
                 else:
+                    vid_tmp = tmp / f"scene_{i:03d}_vid.mp4"
                     _run([
                         "ffmpeg", "-y", "-i", str(base), "-i", str(png),
                         "-filter_complex", "[0:v][1:v]overlay=0:0[v]",
-                        "-map", "[v]", "-map", "0:a?",
-                        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-                        "-c:a", "copy", str(scene_out),
+                        "-map", "[v]",
+                        "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-an",
+                        str(vid_tmp),
                     ])
+
+                # Mix HeyGen TTS narration audio with video
+                if narration and Path(narration).exists():
+                    _run([
+                        "ffmpeg", "-y", "-i", str(vid_tmp), "-i", str(narration),
+                        "-filter_complex",
+                        "[1:a]apad[nar];[nar]atrim=duration=5[a]",
+                        "-map", "0:v", "-map", "[a]",
+                        "-c:v", "copy", "-c:a", "aac", "-b:a", "128k",
+                        "-shortest", str(scene_out),
+                    ])
+                else:
+                    # No narration — add silent audio track so concat works
+                    _run([
+                        "ffmpeg", "-y", "-i", str(vid_tmp),
+                        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+                        "-map", "0:v", "-map", "1:a",
+                        "-c:v", "copy", "-c:a", "aac", "-b:a", "128k",
+                        "-shortest", str(scene_out),
+                    ])
+                vid_tmp.unlink(missing_ok=True)
 
                 base.unlink(missing_ok=True)
                 png.unlink(missing_ok=True)

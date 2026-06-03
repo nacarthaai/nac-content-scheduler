@@ -133,19 +133,23 @@ def main(langs: list = None, on_lang_done=None):
             short_path = lang_dir / "short.mp4"
 
             if is_trading_en:
-                # EN trading: try Veo-native first, fall back to TTS if library empty
-                log.info(f"  [{lang}] Trading EN — assembling Veo-native audio video…")
+                # EN trading: HeyGen TTS narration over Veo/Runway visuals
+                log.info(f"  [{lang}] Trading EN — generating HeyGen TTS narration…")
+                audio_scenes = _generate_audio(en_script["long_scenes"], lang_dir / "audio", voice_engine, "en")
+                audio_map = {s["id"]: s.get("narration_path") for s in audio_scenes}
+
                 en_overlays = {s["id"]: s.get("text_overlay") for s in en_script["long_scenes"]}
                 scenes_vis = []
                 for s in en_script["long_scenes"]:
                     v = scene_visuals.get(s["id"], {})
                     scenes_vis.append({
                         **s,
-                        "image_path":   v.get("image_path", str(_black_image(run_dir))),
-                        "chart_path":   v.get("chart_path"),
-                        "text_overlay": en_overlays.get(s["id"]),
-                        "narration_path": None,
+                        "image_path":     v.get("image_path", str(_black_image(run_dir))),
+                        "chart_path":     v.get("chart_path"),
+                        "text_overlay":   en_overlays.get(s["id"]),
+                        "narration_path": audio_map.get(s["id"]),
                     })
+                log.info(f"  [{lang}] Assembling Veo-native video with HeyGen audio…")
                 assembler.assemble_veo_native(
                     scenes_vis, long_path, music_path,
                     hook_text=en_script.get("hook_text", ""),
