@@ -14,5 +14,7 @@ cache/
 # Library assets tracked via Git LFS — allow these
 !assets/library/**/*.mp4
 !assets/library/library_index.json
+# Music tracks always ship with the repo
+!assets/music/*.mp3
 .env
 client_secret.json

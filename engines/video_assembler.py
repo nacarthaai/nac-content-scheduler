@@ -220,9 +220,7 @@ class VideoAssembler:
                 if narration and Path(narration).exists():
                     _run([
                         "ffmpeg", "-y", "-i", str(vid_tmp), "-i", str(narration),
-                        "-filter_complex",
-                        "[1:a]apad[nar];[nar]atrim=duration=5[a]",
-                        "-map", "0:v", "-map", "[a]",
+                        "-map", "0:v", "-map", "1:a",
                         "-c:v", "copy", "-c:a", "aac", "-b:a", "128k",
                         "-shortest", str(scene_out),
                     ])
