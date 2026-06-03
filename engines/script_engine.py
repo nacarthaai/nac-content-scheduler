@@ -60,38 +60,35 @@ Same warm/cool lighting setup. Never appears in bot/news/recap episodes.
 
 _RULES = """
 SCENE COUNT AND LENGTH:
-- long_scenes: exactly 10 scenes. Total narration 290-320 words (5-6 minutes at natural pace).
+- long_scenes: exactly 12 scenes. Total narration 450-550 words (3-5 minutes at natural speaking pace).
 - NO short_scenes — Shorts are automatically cut from the first 60 seconds of the long video.
 - emotion: one of clarity | curiosity | confidence | focus | excitement | insight | tension
 - pace: one of hook | normal | reveal | cta
 
 PACE RULES:
   hook   → scene 1 ALWAYS.
-  reveal → drop a key number, answer a planted open loop, or land a surprising fact. Use 2-4× per video.
+  reveal → drop a key number, answer a planted open loop, or land a surprising fact. Use 3-4× per video.
   cta    → last scene ALWAYS.
   normal → everything else.
 
-SCENE TYPE RULES — MANDATORY distribution across 10 scenes:
-  scene_type must be one of: "nac_face" | "illustrated" | "chart"
+SCENE TYPE RULES — MANDATORY distribution across 12 scenes:
+  scene_type must be one of: "nac_face" | "illustrated"
+  DO NOT use "chart" scene_type — no charts, no stock images in any scene.
+  chart_key must be null for ALL scenes.
 
-  nac_face (3-5 scenes): Illustrated portrait/half-body of Nac in trading room.
-    → ALWAYS scene 1 (hook) and scene 10 (cta).
-    → 1-3 more scenes at key emotional moments (hero shot, reveal reaction, etc.)
+  nac_face (5-6 scenes): Runway/Veo NAC character clip — NAC at trading desk.
+    → ALWAYS scene 1 (hook) and scene 12 (cta).
+    → 3-4 more scenes at key emotional moments (hero shot, reveal reaction, etc.)
 
-  chart (2-3 scenes): Real trading chart appears on screen. Use at data-heavy moments.
-    → chart_key must be one of: "pnl" | "equity" | "positions" | "trades"
-    → pnl = today's P&L over time, equity = equity curve, positions = open positions, trades = today's trade list
-    → visual_prompt describes the illustrated background (trading room, dark, terminal glow)
-    → chart_key: null for all non-chart scenes
-
-  illustrated (3-5 scenes): Cinematic environment or action scene — no Nac character needed.
-    → Markets, trading terminals, city skyline, data flows, abstract financial imagery
+  illustrated (5-6 scenes): Cinematic trading environment — no NAC character needed.
+    → Markets, trading terminals, city skyline, data flows, abstract financial imagery.
+    → NO stock market charts, NO price graphs, NO candlestick charts in visual_prompt.
 
 INTRO RULE (scene 1, pace: hook, scene_type: nac_face) — MANDATORY:
   Narration MUST open word-for-word: "Hey. Nac here. Welcome to my trading world."
   Then pivot to the single most tension-filled stat or moment — no warmup.
 
-OUTRO RULE (scene 10, pace: cta, scene_type: nac_face) — MANDATORY word-for-word:
+OUTRO RULE (scene 12, pace: cta, scene_type: nac_face) — MANDATORY word-for-word:
   "Subscribe to NacArtha. I trade every day — you should know what I know. Follow the algorithm. See you tomorrow."
 
 OPEN LOOPS: Plant a specific question in scenes 2-4. Resolve it in a reveal scene.

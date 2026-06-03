@@ -329,20 +329,11 @@ def _build_visuals(
             clip = library.get_student_clip(emotion="curiosity")
             image_path = str(clip) if clip else None
 
-        # ── chart scene ──────────────────────────────────────────────────────
+        # ── chart scene — treat as illustrated (no charts in videos) ────────
         elif scene_type == "chart":
-            if is_trading:
-                # Trading: prefer Runway wide/desk shots as chart background
-                bg = (library.get_runway_nac_clip(pose="wide_shot") or
-                      library.get_runway_nac_clip(pose="desk_lean") or
-                      library.get_nac_veo_clip(pose="desk_study") or
-                      library.get_nac_veo_clip())
-            else:
-                bg_cat = "classroom" if video_type == "educational" else "trading"
-                bg = library.get_background(bg_cat)
+            bg = library.get_nac_veo_clip() or library.get_runway_nac_clip()
             image_path = str(bg) if bg else None
-            if chart_key:
-                chart_path = _generate_chart(chart_key, chart_eng, charts_dir, topic)
+            chart_path = None  # no charts in videos
 
         # ── news scene ───────────────────────────────────────────────────────
         elif scene_type == "news":
