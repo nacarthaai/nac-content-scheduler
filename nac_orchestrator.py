@@ -148,6 +148,7 @@ def main(langs: list = None, on_lang_done=None):
                         **s,
                         "image_path":     v.get("image_path", str(_black_image(run_dir))),
                         "chart_path":     v.get("chart_path"),
+                        "extra_visuals":  v.get("extra_visuals", []),
                         "text_overlay":   en_overlays.get(s["id"]),
                         "narration_path": audio_map.get(s["id"]),
                     })
@@ -195,6 +196,7 @@ def main(langs: list = None, on_lang_done=None):
                     v = scene_visuals.get(s["id"], {})
                     s["image_path"]   = v.get("image_path", str(_black_image(run_dir)))
                     s["chart_path"]   = v.get("chart_path")
+                    s["extra_visuals"]= v.get("extra_visuals", [])
                     s["text_overlay"] = en_overlays.get(s["id"])
 
                 assembled_path = lang_dir / "assembled.mp4"

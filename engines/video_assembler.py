@@ -45,23 +45,29 @@ class VideoAssembler:
             tmp = Path(tmp)
             scene_paths = []
             for i, scene in enumerate(scenes):
-                scene_out = tmp / f"scene_{i:03d}.mp4"
-                overlay   = scene.get("text_overlay") or ""
-                extra     = hook_text if i == 0 else (cta_text if i == len(scenes) - 1 else "")
-                pace      = scene.get("pace", "normal")
+                scene_out  = tmp / f"scene_{i:03d}.mp4"
+                overlay    = scene.get("text_overlay") or ""
+                extra      = hook_text if i == 0 else (cta_text if i == len(scenes) - 1 else "")
+                pace       = scene.get("pace", "normal")
                 chart_path = Path(scene["chart_path"]) if scene.get("chart_path") else None
+                extra_vis  = [Path(p) for p in scene.get("extra_visuals", [])
+                              if p and Path(p).exists()]
 
-                self._build_scene(
-                    image=Path(scene["image_path"]),
-                    audio=Path(scene["narration_path"]),
-                    out=scene_out,
-                    w=w, h=h,
-                    overlay=overlay,
-                    extra_text=extra,
-                    scene_idx=i,
-                    pace=pace,
-                    chart_path=chart_path,
-                )
+                if extra_vis:
+                    # NAC Memory Rule: cycle through contextual images
+                    self._build_intel_slideshow(
+                        images=extra_vis, audio=Path(scene["narration_path"]),
+                        out=scene_out, w=w, h=h, overlay=overlay,
+                        extra_text=extra, pace=pace, scene_idx=i,
+                    )
+                else:
+                    self._build_scene(
+                        image=Path(scene["image_path"]),
+                        audio=Path(scene["narration_path"]),
+                        out=scene_out, w=w, h=h, overlay=overlay,
+                        extra_text=extra, scene_idx=i, pace=pace,
+                        chart_path=chart_path,
+                    )
                 scene_paths.append(scene_out)
 
             raw = tmp / "raw.mp4"
@@ -99,14 +105,81 @@ class VideoAssembler:
                 if src.suffix.lower() not in (".mp4", ".mov", ".webm", ".mkv"):
                     continue  # skip non-video scenes (charts, images)
 
-                scene_out = tmp / f"scene_{i:03d}.mp4"
-                overlay   = scene.get("text_overlay") or ""
-                extra     = hook_text if i == 0 else (cta_text if i == len(scenes) - 1 else "")
+                scene_out  = tmp / f"scene_{i:03d}.mp4"
+                overlay    = scene.get("text_overlay") or ""
+                extra      = hook_text if i == 0 else (cta_text if i == len(scenes) - 1 else "")
                 chart_path = Path(scene["chart_path"]) if scene.get("chart_path") else None
+                extra_vis  = [Path(p) for p in scene.get("extra_visuals", [])
+                              if p and Path(p).exists()]
+                narration  = scene.get("narration_path")
 
+                # NAC Memory Rule: if contextual visuals exist, use intel slideshow
+                # Runway/Veo clip opens the scene (first 5s), then contextual images follow
+                if extra_vis and narration and Path(narration).exists():
+                    nar_dur = _audio_duration(Path(narration))
+                    base_dur = min(5.0, nar_dur * 0.35)  # Runway clip = first 35% or 5s max
+                    intel_dur = nar_dur - base_dur
+
+                    # Part 1: Runway clip (opening)
+                    base_clip = tmp / f"scene_{i:03d}_base.mp4"
+                    _run([
+                        "ffmpeg", "-y", "-i", str(src),
+                        "-t", str(base_dur),
+                        "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},fps=30",
+                        "-an", "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                        "-pix_fmt", "yuv420p", str(base_clip),
+                    ])
+
+                    # Part 2: contextual images slideshow
+                    intel_clip = tmp / f"scene_{i:03d}_intel.mp4"
+                    secs_each = max(3.0, intel_dur / len(extra_vis))
+                    slide_parts = []
+                    for j, img_p in enumerate(extra_vis):
+                        sp = tmp / f"scene_{i:03d}_sl{j}.mp4"
+                        nf = int(secs_each * 30)
+                        pan = (1 if j % 2 == 0 else -1)
+                        vf = (
+                            f"scale={w*2}:{h*2}:force_original_aspect_ratio=increase,"
+                            f"crop={w*2}:{h*2},"
+                            f"zoompan=z='pzoom+0.0008':x='iw/2-(iw/zoom/2)+{pan}*(iw/zoom/2-iw/2)*on/{nf}':"
+                            f"y='ih/2-(ih/zoom/2)':d={nf}:s={w}x{h}:fps=30,"
+                            f"fade=t=in:st=0:d=0.2,fade=t=out:st={secs_each-0.2:.2f}:d=0.2"
+                        )
+                        if img_p.suffix.lower() in (".mp4", ".mov", ".webm"):
+                            _run(["ffmpeg", "-y", "-stream_loop", "-1", "-i", str(img_p),
+                                  "-t", str(secs_each),
+                                  "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},fps=30",
+                                  "-an", "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p", str(sp)])
+                        else:
+                            _run(["ffmpeg", "-y", "-loop", "1", "-i", str(img_p),
+                                  "-t", str(secs_each), "-vf", vf,
+                                  "-an", "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p", str(sp)])
+                        slide_parts.append(sp)
+
+                    self._concat_video_only(slide_parts, intel_clip, intel_dur)
+
+                    # Merge opening + intel slideshow
+                    full_vis = tmp / f"scene_{i:03d}_fullvis.mp4"
+                    self._concat_video_only([base_clip, intel_clip], full_vis, nar_dur)
+
+                    # Text overlay + narration audio
+                    png = tmp / f"scene_{i:03d}_ovr.png"
+                    _make_text_png(overlay, extra, w, h, png)
+                    _run([
+                        "ffmpeg", "-y",
+                        "-i", str(full_vis), "-i", str(png), "-i", str(narration),
+                        "-filter_complex", "[0:v][1:v]overlay=0:0[v];[2:a]apad[a]",
+                        "-map", "[v]", "-map", "[a]",
+                        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                        "-c:a", "aac", "-b:a", "128k", "-t", str(nar_dur), str(scene_out),
+                    ])
+                    base.unlink(missing_ok=True) if (base := tmp / f"scene_{i:03d}_base2.mp4").exists() else None
+                    scene_paths.append(scene_out)
+                    continue
+
+                # Standard path: Runway/Veo clip only
                 # Trim/scale clip (video only — audio comes from HeyGen TTS)
                 base = tmp / f"scene_{i:03d}_base.mp4"
-                narration = scene.get("narration_path")
                 _run([
                     "ffmpeg", "-y", "-i", str(src),
                     "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},fps=30",
@@ -334,6 +407,103 @@ class VideoAssembler:
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
             "-c:a", "aac", "-b:a", "128k",
             str(out),
+        ])
+        list_file.unlink(missing_ok=True)
+
+    def _build_intel_slideshow(
+        self,
+        images: list,
+        audio: Path,
+        out: Path,
+        w: int,
+        h: int,
+        overlay: str,
+        extra_text: str,
+        pace: str,
+        scene_idx: int,
+    ):
+        """
+        NAC Memory Rule: cycle through contextual images during scene.
+        Each image shows for 3-5s with Ken Burns effect.
+        Audio narration plays over the full slideshow.
+        """
+        duration = _audio_duration(audio)
+        if duration <= 0:
+            duration = 8.0
+
+        secs_per_image = max(3.0, min(5.0, duration / len(images)))
+        pan_dir = 1 if scene_idx % 2 == 0 else -1
+        zoom_speed = 0.0008
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            slide_paths = []
+
+            for j, img_path in enumerate(images):
+                img = Path(img_path)
+                slide_out = tmp / f"slide_{j:03d}.mp4"
+                n_frames  = int(secs_per_image * 30)
+                pan       = pan_dir * (-1 if j % 2 == 0 else 1)
+
+                vf = (
+                    f"scale={w*2}:{h*2}:force_original_aspect_ratio=increase,"
+                    f"crop={w*2}:{h*2},"
+                    f"zoompan=z='pzoom+{zoom_speed}':x='iw/2-(iw/zoom/2)+{pan}*(iw/zoom/2-iw/2)*on/{n_frames}':"
+                    f"y='ih/2-(ih/zoom/2)':d={n_frames}:s={w}x{h}:fps=30,"
+                    f"fade=t=in:st=0:d=0.2,"
+                    f"fade=t=out:st={secs_per_image-0.2:.2f}:d=0.2"
+                )
+
+                if img.suffix.lower() in (".mp4", ".mov", ".webm", ".mkv"):
+                    _run([
+                        "ffmpeg", "-y", "-stream_loop", "-1", "-i", str(img),
+                        "-t", str(secs_per_image),
+                        "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},fps=30",
+                        "-an", "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                        "-pix_fmt", "yuv420p", str(slide_out),
+                    ])
+                else:
+                    _run([
+                        "ffmpeg", "-y", "-loop", "1", "-i", str(img),
+                        "-t", str(secs_per_image),
+                        "-vf", vf, "-an",
+                        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                        "-pix_fmt", "yuv420p", str(slide_out),
+                    ])
+                slide_paths.append(slide_out)
+
+            # Concat slides into a single video
+            raw_vis = tmp / "raw_vis.mp4"
+            self._concat_video_only(slide_paths, raw_vis, duration)
+
+            # Text overlay
+            png = tmp / "ovr.png"
+            _make_text_png(overlay, extra_text, w, h, png, pace=pace)
+
+            # Overlay text + mix audio
+            _run([
+                "ffmpeg", "-y",
+                "-i", str(raw_vis), "-i", str(png), "-i", str(audio),
+                "-filter_complex",
+                "[0:v][1:v]overlay=0:0[v];"
+                "[2:a]apad[a]",
+                "-map", "[v]", "-map", "[a]",
+                "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                "-c:a", "aac", "-b:a", "128k",
+                "-t", str(duration), str(out),
+            ])
+
+    def _concat_video_only(self, paths: list, out: Path, target_dur: float):
+        """Concat video-only clips, trim/pad to target duration."""
+        import tempfile as _tf
+        list_file = out.parent / f"{out.stem}_list.txt"
+        list_file.write_text("\n".join(f"file '{p}'" for p in paths))
+        _run([
+            "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+            "-i", str(list_file),
+            "-t", str(target_dur),
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-an", str(out),
         ])
         list_file.unlink(missing_ok=True)
 
