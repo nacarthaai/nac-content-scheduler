@@ -296,9 +296,14 @@ def _build_visuals(
         if scene_type == "nac_face":
             pace = scene.get("pace", "normal")
             if is_trading:
-                # Trading videos: prefer Veo 3.1 NAC character clip
+                # Hook + CTA: use Runway clips (camera-facing, highest impact)
+                # Reveal + others: use any NAC veo clip by pose
                 pose_map = {"hook": "camera_direct", "cta": "camera_point", "reveal": "pointing"}
-                clip = library.get_nac_veo_clip(pose=pose_map.get(pace)) or library.get_nac_veo_clip()
+                pose = pose_map.get(pace)
+                if pace in ("hook", "cta"):
+                    clip = library.get_runway_nac_clip(pose=pose) or library.get_nac_veo_clip(pose=pose)
+                else:
+                    clip = library.get_nac_veo_clip(pose=pose) or library.get_nac_veo_clip()
             else:
                 clip = None
             if not clip:
@@ -314,8 +319,11 @@ def _build_visuals(
         # ── chart scene ──────────────────────────────────────────────────────
         elif scene_type == "chart":
             if is_trading:
-                # Trading: NAC in scene with chart overlaid on top
-                bg = library.get_nac_veo_clip(pose="desk_study") or library.get_nac_veo_clip()
+                # Trading: prefer Runway wide/desk shots as chart background
+                bg = (library.get_runway_nac_clip(pose="wide_shot") or
+                      library.get_runway_nac_clip(pose="desk_lean") or
+                      library.get_nac_veo_clip(pose="desk_study") or
+                      library.get_nac_veo_clip())
             else:
                 bg_cat = "classroom" if video_type == "educational" else "trading"
                 bg = library.get_background(bg_cat)

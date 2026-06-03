@@ -48,7 +48,7 @@ class LibraryEngine:
         return self._get_clip("student", emotion, category)
 
     def get_nac_veo_clip(self, pose: str = None) -> Path | None:
-        """Return a Veo 3.1 NAC character clip. Optionally filter by pose."""
+        """Return a NAC character clip (Veo or Runway). Optionally filter by pose."""
         candidates = [
             c for c in self._index
             if c.get("type") == "veo_nac"
@@ -63,6 +63,23 @@ class LibraryEngine:
             log.info(f"  NAC Veo [{chosen['id']}] pose={chosen['pose']}")
             return p
         return None
+
+    def get_runway_nac_clip(self, pose: str = None) -> Path | None:
+        """Prefer Runway-generated NAC clips (run_nac_*). Falls back to any veo_nac."""
+        candidates = [
+            c for c in self._index
+            if c.get("type") == "veo_nac"
+            and c["id"].startswith("run_nac_")
+            and (pose is None or c.get("pose") == pose)
+        ]
+        if not candidates:
+            return self.get_nac_veo_clip(pose=pose)
+        chosen = random.choice(candidates)
+        p = LIBRARY_DIR / chosen["path"]
+        if p.exists():
+            log.info(f"  Runway NAC [{chosen['id']}] pose={chosen['pose']}")
+            return p
+        return self.get_nac_veo_clip(pose=pose)
 
     def get_background(self, scene_category: str = "trading") -> Path | None:
         """scene_category: trading | classroom | news"""

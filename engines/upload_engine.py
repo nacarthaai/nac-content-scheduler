@@ -186,3 +186,25 @@ def get_refresh_token(client_id: str, client_secret: str) -> str:
     flow = InstalledAppFlow.from_client_config(client_config, YOUTUBE_SCOPES)
     creds = flow.run_local_server(port=0)
     return creds.refresh_token
+
+
+if __name__ == "__main__":
+    import argparse, os
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--auth", action="store_true", help="Run OAuth flow to get refresh token")
+    parser.add_argument("--channel", default="en", help="Channel label (en/hi/te) — for your reference only")
+    args = parser.parse_args()
+
+    if args.auth:
+        client_id     = os.environ.get("YOUTUBE_CLIENT_ID", "")
+        client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET", "")
+        if not client_id or not client_secret:
+            print("ERROR: Set YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET env vars first")
+            raise SystemExit(1)
+        print(f"\nOpening browser for [{args.channel}] channel OAuth…")
+        token = get_refresh_token(client_id, client_secret)
+        print(f"\n{'='*60}")
+        print(f"YOUTUBE_REFRESH_TOKEN_{args.channel.upper()}:")
+        print(token)
+        print(f"{'='*60}")
+        print("Paste this into Railway Variables and save.")
