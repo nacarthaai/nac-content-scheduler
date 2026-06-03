@@ -10,5 +10,9 @@ cache/
 *.jpg
 *.jpeg
 *.zip
+
+# Library assets tracked via Git LFS — allow these
+!assets/library/**/*.mp4
+!assets/library/library_index.json
 .env
 client_secret.json
