@@ -128,7 +128,7 @@ class VideoAssembler:
                         f"[0:v][1:v]overlay=0:0[with_text];"
                         f"[2:v]scale={chart_w}:{chart_h}[chart];"
                         f"[with_text][chart]overlay={chart_x}:{chart_y}[v]",
-                        "-map", "[v]", "-map", "0:a",
+                        "-map", "[v]", "-map", "0:a?",
                         "-c:v", "libx264", "-preset", "fast", "-crf", "23",
                         "-c:a", "copy", str(scene_out),
                     ])
@@ -136,7 +136,7 @@ class VideoAssembler:
                     _run([
                         "ffmpeg", "-y", "-i", str(base), "-i", str(png),
                         "-filter_complex", "[0:v][1:v]overlay=0:0[v]",
-                        "-map", "[v]", "-map", "0:a",
+                        "-map", "[v]", "-map", "0:a?",
                         "-c:v", "libx264", "-preset", "fast", "-crf", "23",
                         "-c:a", "copy", str(scene_out),
                     ])
@@ -363,15 +363,15 @@ def _make_text_png(overlay: str, extra_text: str, w: int, h: int, out_path: Path
         )
         draw.text((x, y), overlay, fill=ov_color, font=ov_font)
 
-    # Hook / CTA — upper center
+    # Hook / CTA — top edge (above face) to avoid covering NAC
     if extra_text:
         is_hook = pace == "hook"
-        ex_size = 72 if is_hook else 56
+        ex_size = 60 if is_hook else 52
         ex_font = _font(ex_size)
         lines   = _wrap(extra_text, draw, ex_font, w - 80)
-        lh      = draw.textbbox((0, 0), "Ag", font=ex_font)[3] + 10
+        lh      = draw.textbbox((0, 0), "Ag", font=ex_font)[3] + 8
         total_h = lh * len(lines)
-        y = int(h * 0.18) if is_hook else (h - total_h) // 2
+        y = 18  # always pin to very top — never overlaps face
         for line in lines:
             lb  = draw.textbbox((0, 0), line, font=ex_font)
             lw  = lb[2] - lb[0]
