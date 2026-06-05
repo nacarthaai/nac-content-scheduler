@@ -84,7 +84,7 @@ class VoiceEngine:
             r = requests.post(
                 _HEYGEN_URL,
                 headers={"X-Api-Key": self._api_key, "Content-Type": "application/json"},
-                json={"voice_id": voice_id, "text": text, "speed": 0.95},
+                json={"voice_id": voice_id, "text": text, "speed": 1.0},
                 timeout=120,
             )
             if r.status_code != 200:
