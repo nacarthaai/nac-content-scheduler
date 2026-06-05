@@ -446,23 +446,44 @@ def _generate_audio(scenes: list, out_dir: Path, voice_engine: VoiceEngine, lang
 
 
 def _upload_for_translate(video_path: Path) -> str | None:
-    """Upload video to catbox.moe and return a public URL for HeyGen video_translate."""
+    """Upload video to HeyGen's own servers and return the URL for video_translate."""
+    import requests as _r
+    api_key = os.environ.get("HEYGEN_API_KEY", "")
+
+    # Step 1: get a presigned upload URL from HeyGen
     try:
-        import requests as _r
-        with open(video_path, "rb") as f:
-            resp = _r.post(
-                "https://catbox.moe/user/api.php",
-                data={"reqtype": "fileupload"},
-                files={"fileToUpload": (video_path.name, f, "video/mp4")},
-                timeout=180,
-            )
-        if resp.status_code == 200 and resp.text.startswith("https://"):
-            log.info(f"  Uploaded for translate → {resp.text.strip()}")
-            return resp.text.strip()
-        log.warning(f"  catbox upload failed: {resp.status_code} {resp.text[:200]}")
-        return None
+        r = _r.get(
+            "https://upload.heygen.com/v1/asset",
+            headers={"X-Api-Key": api_key},
+            params={"length": video_path.stat().st_size, "type": "video/mp4"},
+            timeout=30,
+        )
+        if r.status_code != 200:
+            log.warning(f"  HeyGen asset presign failed: {r.status_code} {r.text[:200]}")
+            return None
+        data = r.json().get("data", {})
+        upload_url = data.get("url") or data.get("upload_url")
+        video_url  = data.get("video_url") or data.get("asset_url") or data.get("url")
+        if not upload_url:
+            log.warning(f"  HeyGen asset presign: no upload_url in {data}")
+            return None
     except Exception as e:
-        log.warning(f"  _upload_for_translate error: {e}")
+        log.warning(f"  HeyGen asset presign error: {e}")
+        return None
+
+    # Step 2: PUT the video bytes to the presigned URL
+    try:
+        with open(video_path, "rb") as f:
+            put = _r.put(upload_url, data=f,
+                         headers={"Content-Type": "video/mp4"},
+                         timeout=300)
+        if put.status_code not in (200, 201, 204):
+            log.warning(f"  HeyGen asset PUT failed: {put.status_code}")
+            return None
+        log.info(f"  Uploaded to HeyGen → {video_url}")
+        return video_url
+    except Exception as e:
+        log.warning(f"  HeyGen asset upload error: {e}")
         return None
 
 
