@@ -64,10 +64,14 @@ class VoiceEngine:
         if self._heygen_generate(text, out_path, voice_id, lang):
             return out_path
 
-        raise RuntimeError(
-            f"HeyGen TTS failed for [{lang}] — refusing Edge TTS fallback to protect NAC voice. "
-            f"Check HeyGen API status and voice ID {voice_id[:8]}…"
-        )
+        if lang == "en":
+            raise RuntimeError(
+                f"HeyGen TTS failed for [en] — refusing Edge TTS fallback to protect NAC voice. "
+                f"Check HeyGen API status and voice ID {voice_id[:8]}…"
+            )
+
+        log.warning(f"  HeyGen TTS failed [{lang}] — using Edge TTS fallback (HI/TE only)")
+        return self._edge_generate(text, out_path, lang)
 
     def get_duration(self, mp3_path: Path) -> float:
         try:
