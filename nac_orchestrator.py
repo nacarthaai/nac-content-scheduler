@@ -116,7 +116,7 @@ def main(langs: list = None, on_lang_done=None):
 
     # ── 4. Per-language pipeline ──────────────────────────────────────────────
     results = {}
-    en_video_url = None  # populated after EN completes, used for video_translate
+    en_asset_id = ""  # HeyGen asset_id for EN video — used for v3/video-translations
 
     for lang in langs:
         log.info(f"\n{'='*55}\n  [{lang.upper()}] Pipeline\n{'='*55}")
@@ -167,20 +167,20 @@ def main(langs: list = None, on_lang_done=None):
                         s["chart_path"] = v.get("chart_path")
                         s["text_overlay"] = None
                     assembler.assemble(audio_scenes, long_path, "landscape", music_path)
-                # Upload EN video to HeyGen's servers so translate can access it
+                # Upload EN video to HeyGen asset store so translate can access it
                 if long_path.exists():
                     log.info(f"  [en] Uploading to HeyGen for translate…")
-                    en_video_url = _upload_for_translate(long_path)
-                    if en_video_url:
-                        log.info(f"  [en] HeyGen URL for translate: {en_video_url}")
+                    en_asset_id = _upload_for_translate(long_path)
+                    if en_asset_id:
+                        log.info(f"  [en] HeyGen asset_id ready for translate")
                     else:
                         log.warning(f"  [en] HeyGen upload failed — HI/TE translate will be skipped")
 
-            elif video_type in ("bot_performance", "bot") and lang in ("hi", "te") and en_video_url:
-                # HI/TE trading: translate EN video — preserves NAC's voice cloned to target language
+            elif video_type in ("bot_performance", "bot") and lang in ("hi", "te") and en_asset_id:
+                # HI/TE trading: translate EN video via HeyGen v3 — preserves NAC's voice
                 log.info(f"  [{lang}] Video translate from EN → {lang.upper()}…")
                 lang_name = "Hindi (India)" if lang == "hi" else "Telugu (India)"
-                translated = _heygen_video_translate(en_video_url, lang_name, long_path,
+                translated = _heygen_video_translate(en_asset_id, lang_name, long_path,
                                                       os.environ.get("HEYGEN_API_KEY",""))
                 if not translated:
                     log.warning(f"  [{lang}] Video translate failed — falling back to TTS assembly")
@@ -450,78 +450,76 @@ def _generate_audio(scenes: list, out_dir: Path, voice_engine: VoiceEngine, lang
     return result
 
 
-def _upload_for_translate(video_path: Path) -> str | None:
-    """Upload video to HeyGen's own servers and return the URL for video_translate."""
+def _upload_for_translate(video_path: Path) -> str:
+    """Upload EN video to HeyGen /v3/assets (multipart). Returns asset_id or empty string."""
     import requests as _r
     api_key = os.environ.get("HEYGEN_API_KEY", "")
-
-    # Step 1: get a presigned upload URL from HeyGen
-    try:
-        r = _r.get(
-            "https://upload.heygen.com/v1/asset",
-            headers={"X-Api-Key": api_key},
-            params={"length": video_path.stat().st_size, "type": "video/mp4"},
-            timeout=30,
-        )
-        if r.status_code != 200:
-            log.warning(f"  HeyGen asset presign failed: {r.status_code} {r.text[:200]}")
-            return None
-        data = r.json().get("data", {})
-        upload_url = data.get("url") or data.get("upload_url")
-        video_url  = data.get("video_url") or data.get("asset_url") or data.get("url")
-        if not upload_url:
-            log.warning(f"  HeyGen asset presign: no upload_url in {data}")
-            return None
-    except Exception as e:
-        log.warning(f"  HeyGen asset presign error: {e}")
-        return None
-
-    # Step 2: PUT the video bytes to the presigned URL
+    size_mb = video_path.stat().st_size / 1024 / 1024
+    if size_mb > 32:
+        log.warning(f"  EN video {size_mb:.1f} MB exceeds HeyGen 32 MB limit — translate skipped")
+        return ""
     try:
         with open(video_path, "rb") as f:
-            put = _r.put(upload_url, data=f,
-                         headers={"Content-Type": "video/mp4"},
-                         timeout=300)
-        if put.status_code not in (200, 201, 204):
-            log.warning(f"  HeyGen asset PUT failed: {put.status_code}")
-            return None
-        log.info(f"  Uploaded to HeyGen → {video_url}")
-        return video_url
+            r = _r.post(
+                "https://api.heygen.com/v3/assets",
+                headers={"X-Api-Key": api_key},
+                files={"file": ("long.mp4", f, "video/mp4")},
+                timeout=300,
+            )
+        if r.status_code != 200:
+            log.warning(f"  HeyGen asset upload failed: {r.status_code} {r.text[:200]}")
+            return ""
+        data = r.json().get("data", {})
+        asset_id = data.get("asset_id", "")
+        log.info(f"  HeyGen asset uploaded → asset_id={asset_id[:16]}…")
+        return asset_id
     except Exception as e:
         log.warning(f"  HeyGen asset upload error: {e}")
-        return None
+        return ""
 
 
-def _heygen_video_translate(video_url: str, output_language: str, out_path: Path, api_key: str) -> Path | None:
-    """Translate a video to target language using HeyGen's voice-cloning translation API."""
+def _heygen_video_translate(asset_id: str, output_language: str, out_path: Path, api_key: str) -> Path:
+    """Translate EN video (by HeyGen asset_id) to target language using v3 API."""
     import requests as _r, time as _t
     h = {"X-Api-Key": api_key, "Content-Type": "application/json"}
     try:
-        r = _r.post("https://api.heygen.com/v2/video_translate", headers=h,
-                    json={"video_url": video_url, "output_language": output_language}, timeout=30)
+        payload = {
+            "video": {"type": "asset_id", "asset_id": asset_id},
+            "output_languages": [output_language],
+        }
+        r = _r.post("https://api.heygen.com/v3/video-translations", headers=h,
+                    json=payload, timeout=30)
         if r.status_code not in (200, 202):
-            log.warning(f"  HeyGen translate submit failed: {r.status_code} {r.text[:200]}")
+            log.warning(f"  HeyGen translate submit failed: {r.status_code} {r.text[:300]}")
             return None
-        tid = r.json()["data"]["video_translate_id"]
+        resp_data = r.json().get("data", {})
+        # v3 returns video_translation_id (singular) for single-language request
+        tid = (resp_data.get("video_translation_id")
+               or (resp_data.get("video_translation_ids") or [None])[0])
+        if not tid:
+            log.warning(f"  HeyGen translate: no job ID in response: {resp_data}")
+            return None
         log.info(f"  HeyGen translate job={tid}")
 
         deadline = _t.time() + 1800
         while _t.time() < deadline:
             _t.sleep(20)
-            s = _r.get(f"https://api.heygen.com/v2/video_translate/{tid}", headers={"X-Api-Key": api_key}, timeout=15)
+            s = _r.get(f"https://api.heygen.com/v3/video-translations/{tid}",
+                       headers={"X-Api-Key": api_key}, timeout=15)
             d = s.json().get("data", {})
             status = d.get("status", "")
             log.info(f"  HeyGen translate [{status}]")
-            if status == "success":
-                url = d.get("url") or d.get("video_url", "")
-                resp = _r.get(url, stream=True, timeout=120)
+            if status == "completed":
+                url = d.get("video_url", "")
+                resp = _r.get(url, stream=True, timeout=300)
+                resp.raise_for_status()
                 out_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(out_path, "wb") as f:
-                    for chunk in resp.iter_content(8192): f.write(chunk)
-                log.info(f"  HeyGen translate saved → {out_path.name} ({out_path.stat().st_size/1024/1024:.1f} MB)")
+                    for chunk in resp.iter_content(1024 * 1024): f.write(chunk)
+                log.info(f"  Translate saved → {out_path.name} ({out_path.stat().st_size/1024/1024:.1f} MB)")
                 return out_path
-            if status in ("failed", "error"):
-                log.warning(f"  HeyGen translate failed: {d}")
+            if status == "failed":
+                log.warning(f"  HeyGen translate failed: {d.get('failure_message', d)}")
                 return None
         log.warning("  HeyGen translate timeout")
         return None
