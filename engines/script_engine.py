@@ -102,6 +102,19 @@ SENTENCE RHYTHM: Punch short sentences against long ones. Never 3 same-length in
   Good: "Three signals fired. Only one qualified. The other two? Risk management killed them."
   Bad:  "The algorithm scanned multiple stocks. It found several signals today. Many were rejected."
 
+NARRATION VOICE — SPOKEN WORD, NOT WRITTEN TEXT:
+Write every narration as if Nac is SPEAKING out loud — casual, urgent, in-the-moment. Not a script being read. A person TALKING.
+  - Use fragments deliberately: "Three signals. One winner. That's it."
+  - Use rhetorical questions: "You know what that means? Everything."
+  - Use "—" for dramatic mid-sentence pauses: "The signal fired — and I almost missed it."
+  - Start sentences with "So", "But", "And", "Now" — conversational openers are natural in speech.
+  - Never use colons, semicolons, or bullet-list sentence structures inside narration.
+  - Vary energy: calm observation → tension build → sharp reveal → calm again.
+  Bad (robotic): "The RSI indicator reached 72, which signals overbought conditions in the market."
+  Good (alive):  "RSI hit 72. That's overbought. My system flagged it before I even looked."
+  Bad (robotic): "Multiple momentum signals were identified across various market conditions."
+  Good (alive):  "Signals everywhere. But only one made it through my filters. Just one."
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 VISUAL PROMPT RULES — ILLUSTRATED STILL IMAGE FORMAT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
