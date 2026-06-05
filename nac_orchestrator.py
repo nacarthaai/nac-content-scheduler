@@ -167,9 +167,7 @@ def main(langs: list = None, on_lang_done=None):
                         s["chart_path"] = v.get("chart_path")
                         s["text_overlay"] = None
                     assembler.assemble(audio_scenes, long_path, "landscape", music_path)
-                # Upload EN video and get public URL for video_translate
-                en_video_url = _upload_for_translate(long_path)
-                log.info(f"  [en] Public URL for translate: {en_video_url[:60] if en_video_url else 'FAILED'}…")
+                # en_video_url will be set to the YouTube URL after EN uploads below
 
             elif video_type in ("bot_performance", "bot") and lang in ("hi", "te") and en_video_url:
                 # HI/TE trading: translate EN video — preserves NAC's voice cloned to target language
@@ -256,6 +254,10 @@ def main(langs: list = None, on_lang_done=None):
                 "long_url":  long_urls.get(lang),
                 "short_url": short_urls.get(lang),
             }
+            # Use the YouTube EN URL for video_translate — HeyGen accepts YouTube URLs natively
+            if lang == "en" and long_urls.get("en"):
+                en_video_url = long_urls["en"]
+                log.info(f"  [en] YouTube URL for translate: {en_video_url}")
             if on_lang_done:
                 on_lang_done(lang)
             log.info(f"  [{lang}] ✓ Long: {results[lang]['long_url']} | Short: {results[lang]['short_url']}")
