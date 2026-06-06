@@ -524,11 +524,13 @@ def _make_text_png(overlay: str, extra_text: str, w: int, h: int, out_path: Path
     img  = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # Watermark — top right
-    wm_font = _font(28)
-    wm_bb   = draw.textbbox((0, 0), WATERMARK, font=wm_font)
-    wm_w    = wm_bb[2] - wm_bb[0]
-    draw.text((w - wm_w - 24, 24), WATERMARK, fill=(255, 255, 255, 170), font=wm_font)
+    # Watermark — top right, clamped to shorts-safe zone (within center 608px crop)
+    wm_font  = _font(28)
+    wm_bb    = draw.textbbox((0, 0), WATERMARK, font=wm_font)
+    wm_w     = wm_bb[2] - wm_bb[0]
+    safe_r   = (w + 560) // 2  # right edge of short-safe zone (center 560px)
+    wm_x     = min(w - wm_w - 24, safe_r - wm_w - 16)
+    draw.text((wm_x, 24), WATERMARK, fill=(255, 255, 255, 170), font=wm_font)
 
     # Scene text overlay — bottom center
     if overlay:
@@ -559,10 +561,12 @@ def _make_text_png(overlay: str, extra_text: str, w: int, h: int, out_path: Path
         is_hook = pace == "hook"
         ex_size = 60 if is_hook else 52
         ex_font = _font(ex_size)
-        lines   = _wrap(extra_text, draw, ex_font, w - 80)
+        # Constrain to shorts-safe center zone (608px crop of 1920px landscape)
+        safe_w  = min(w - 80, 560) if w >= 1920 else w - 80
+        lines   = _wrap(extra_text, draw, ex_font, safe_w)
         lh      = draw.textbbox((0, 0), "Ag", font=ex_font)[3] + 8
         total_h = lh * len(lines)
-        y = 18  # always pin to very top — never overlaps face
+        y = 60  # 60px from top → maps to ~107px in 1080x1920 short (below status bar)
         for line in lines:
             lb  = draw.textbbox((0, 0), line, font=ex_font)
             lw  = lb[2] - lb[0]
