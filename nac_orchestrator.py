@@ -116,7 +116,6 @@ def main(langs: list = None, on_lang_done=None):
 
     # ── 4. Per-language pipeline ──────────────────────────────────────────────
     results = {}
-    en_asset_id = ""  # HeyGen asset_id for EN video — used for v3/video-translations
 
     for lang in langs:
         log.info(f"\n{'='*55}\n  [{lang.upper()}] Pipeline\n{'='*55}")
@@ -135,8 +134,8 @@ def main(langs: list = None, on_lang_done=None):
             short_path = lang_dir / "short.mp4"
 
             if is_trading_en:
-                # EN trading: HeyGen TTS narration over Veo/Runway visuals
-                log.info(f"  [{lang}] Trading EN — generating HeyGen TTS narration…")
+                # EN trading: ElevenLabs TTS narration over Veo/Runway visuals
+                log.info(f"  [{lang}] Trading EN — generating ElevenLabs TTS narration…")
                 audio_scenes = _generate_audio(en_script["long_scenes"], lang_dir / "audio", voice_engine, "en")
                 audio_map = {s["id"]: s.get("narration_path") for s in audio_scenes}
 
@@ -152,48 +151,23 @@ def main(langs: list = None, on_lang_done=None):
                         "text_overlay":   en_overlays.get(s["id"]),
                         "narration_path": audio_map.get(s["id"]),
                     })
-                log.info(f"  [{lang}] Assembling Veo-native video with HeyGen audio…")
+                log.info(f"  [{lang}] Assembling Veo-native video with ElevenLabs audio…")
                 assembler.assemble_veo_native(
                     scenes_vis, long_path, music_path,
                     hook_text=en_script.get("hook_text", ""),
                     cta_text=en_script.get("cta_text", ""),
                 )
                 if not long_path.exists():
-                    log.warning(f"  [en] Veo-native failed (library empty?) — falling back to TTS assembly (reusing cached audio)")
-                    # Reuse audio_scenes already generated above — no new HeyGen calls
+                    log.warning(f"  [en] Veo-native failed — falling back to TTS assembly (reusing cached audio)")
                     for s in audio_scenes:
                         v = scene_visuals.get(s["id"], {})
                         s["image_path"] = v.get("image_path", str(_black_image(run_dir)))
                         s["chart_path"] = v.get("chart_path")
                         s["text_overlay"] = None
                     assembler.assemble(audio_scenes, long_path, "landscape", music_path)
-                # Upload EN video to HeyGen asset store so translate can access it
-                if long_path.exists():
-                    log.info(f"  [en] Uploading to HeyGen for translate…")
-                    en_asset_id = _upload_for_translate(long_path)
-                    if en_asset_id:
-                        log.info(f"  [en] HeyGen asset_id ready for translate")
-                    else:
-                        log.warning(f"  [en] HeyGen upload failed — HI/TE translate will be skipped")
-
-            elif video_type in ("bot_performance", "bot") and lang in ("hi", "te") and en_asset_id:
-                # HI/TE trading: translate EN video via HeyGen v3 — preserves NAC's voice
-                log.info(f"  [{lang}] Video translate from EN → {lang.upper()}…")
-                lang_name = "Hindi (India)" if lang == "hi" else "Telugu (India)"
-                translated = _heygen_video_translate(en_asset_id, lang_name, long_path,
-                                                      os.environ.get("HEYGEN_API_KEY",""))
-                if not translated:
-                    log.warning(f"  [{lang}] Video translate failed — falling back to TTS assembly")
-                    scenes = _generate_audio(script["long_scenes"], lang_dir / "audio", voice_engine, lang)
-                    for s in scenes:
-                        v = scene_visuals.get(s["id"], {})
-                        s["image_path"] = v.get("image_path", str(_black_image(run_dir)))
-                        s["chart_path"] = v.get("chart_path")
-                        s["text_overlay"] = None
-                    assembler.assemble(scenes, long_path, "landscape", music_path)
             else:
-                # Standard: TTS assembly (educational, news)
-                log.info(f"  [{lang}] Generating audio…")
+                # All languages (EN non-trading, HI, TE): ElevenLabs multilingual TTS assembly
+                log.info(f"  [{lang}] Generating ElevenLabs audio…")
                 scenes = _generate_audio(script["long_scenes"], lang_dir / "audio", voice_engine, lang)
 
                 en_overlays = {s["id"]: s.get("text_overlay") for s in en_script["long_scenes"]}

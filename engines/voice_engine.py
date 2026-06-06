@@ -1,15 +1,14 @@
 """
-VoiceEngine — ElevenLabs TTS for EN, HeyGen video_translate for HI/TE.
+VoiceEngine — ElevenLabs multilingual TTS for EN, HI, TE.
 
-EN  → ElevenLabs (ELEVENLABS_VOICE_ID_EN) — Nac's cloned voice, ~$0.57/month
-HI  → HeyGen video_translate (not TTS) — handled in orchestrator
-TE  → HeyGen video_translate (not TTS) — handled in orchestrator
+All languages use NAC's cloned voice (ELEVENLABS_VOICE_ID_NAC) with eleven_multilingual_v2.
+~$0.57/month total (3k chars/day × 3 languages ≈ 9k chars/day, within creator plan).
+No HeyGen TTS or video_translate needed for audio.
 """
 import json
 import logging
 import os
 import subprocess
-import time
 from pathlib import Path
 
 import requests
@@ -23,12 +22,12 @@ _ELEVENLABS_MODEL = "eleven_multilingual_v2"
 class VoiceEngine:
 
     def __init__(self):
-        self._el_key     = os.environ.get("ELEVENLABS_API_KEY", "")
-        self._el_voice   = os.environ.get("ELEVENLABS_VOICE_ID_EN", "")
-        if self._el_key and self._el_voice:
-            log.info(f"  ElevenLabs TTS ready — voice={self._el_voice[:8]}…")
+        self._key   = os.environ.get("ELEVENLABS_API_KEY", "")
+        self._voice = os.environ.get("ELEVENLABS_VOICE_ID_NAC", "")
+        if self._key and self._voice:
+            log.info(f"  ElevenLabs TTS ready — voice={self._voice[:8]}… (EN/HI/TE)")
         else:
-            log.warning("  ELEVENLABS_API_KEY or ELEVENLABS_VOICE_ID_EN not set")
+            log.warning("  ELEVENLABS_API_KEY or ELEVENLABS_VOICE_ID_NAC not set")
 
     def generate(self, text: str, out_path: Path, lang: str = "en") -> Path:
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -39,21 +38,15 @@ class VoiceEngine:
 
         log.info(f"Voice [{lang}] {len(text)} chars → {out_path.name}")
 
-        if lang != "en":
-            raise RuntimeError(
-                f"VoiceEngine.generate() called for [{lang}] — HI/TE audio is handled "
-                f"via HeyGen video_translate in the orchestrator, not TTS."
-            )
+        if not self._key:
+            raise RuntimeError("ELEVENLABS_API_KEY not set")
+        if not self._voice:
+            raise RuntimeError("ELEVENLABS_VOICE_ID_NAC not set")
 
-        if not self._el_key:
-            raise RuntimeError("ELEVENLABS_API_KEY not set — cannot generate NAC voice audio")
-        if not self._el_voice:
-            raise RuntimeError("ELEVENLABS_VOICE_ID_EN not set — cannot generate NAC voice audio")
-
-        if self._elevenlabs_generate(text, out_path):
+        if self._generate(text, out_path, lang):
             return out_path
 
-        raise RuntimeError("ElevenLabs TTS failed for [en] — check API key and voice ID")
+        raise RuntimeError(f"ElevenLabs TTS failed for [{lang}]")
 
     def get_duration(self, mp3_path: Path) -> float:
         try:
@@ -65,14 +58,11 @@ class VoiceEngine:
         except Exception:
             return 0.0
 
-    def _elevenlabs_generate(self, text: str, out_path: Path) -> bool:
+    def _generate(self, text: str, out_path: Path, lang: str) -> bool:
         try:
             r = requests.post(
-                _ELEVENLABS_URL.format(voice_id=self._el_voice),
-                headers={
-                    "xi-api-key": self._el_key,
-                    "Content-Type": "application/json",
-                },
+                _ELEVENLABS_URL.format(voice_id=self._voice),
+                headers={"xi-api-key": self._key, "Content-Type": "application/json"},
                 json={
                     "text": text,
                     "model_id": _ELEVENLABS_MODEL,
@@ -86,11 +76,11 @@ class VoiceEngine:
                 timeout=120,
             )
             if r.status_code != 200:
-                log.warning(f"  ElevenLabs HTTP {r.status_code}: {r.text[:300]}")
+                log.warning(f"  ElevenLabs [{lang}] HTTP {r.status_code}: {r.text[:300]}")
                 return False
             out_path.write_bytes(r.content)
-            log.info(f"  ElevenLabs saved → {out_path.name} ({out_path.stat().st_size // 1024} KB)")
+            log.info(f"  ElevenLabs [{lang}] saved → {out_path.name} ({out_path.stat().st_size // 1024} KB)")
             return True
         except Exception as e:
-            log.warning(f"  ElevenLabs TTS error: {e}")
+            log.warning(f"  ElevenLabs [{lang}] error: {e}")
             return False
