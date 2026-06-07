@@ -1,10 +1,10 @@
 """
 TopicSelector — Weekday-based content schedule for NacArtha.
 
-Mon / Tue / Wed  →  NacArtha bot updates & live trading recap  (brand building, 3/7 ≈ 43%)
-Thu / Fri        →  Trending finance news                       (current events,  2/7 ≈ 29%)
-Sat              →  Weekly bot performance review               (educational,     1/7 ≈ 14%)
-Sun              →  Educational depth content                   (educational,     1/7 ≈ 14%)
+80% = AI Bot Story Videos  (Mon / Tue / Wed / Thu / Fri / Sat)
+20% = Educational          (Sun only)
+
+The AI Bot is the hero. Every video answers "What did the bot do today?" — not "What happened in the market?"
 """
 import logging
 import os
@@ -16,25 +16,30 @@ log = logging.getLogger("topic_selector")
 
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")
 
-# ── Mon/Tue/Wed: NacArtha Bot Brand & Update Topics ───────────────────────────
-# Performance, transparency, decisions, brand building.
-# Tuesday always uses live Alpaca data (daily_recap). Mon/Wed rotate these.
+# ── Mon / Wed / Thu / Fri / Sat: AI Bot Story Topics ─────────────────────────
+# Every title uses emotional outcome framing. The bot is the character.
+# Pattern: "My Bot [Action]" / "The [Thing] My Bot [Did]" / "My Algorithm [Outcome]"
 BOT_BRAND_TOPICS = [
-    {"id": "bot_today_signals",     "title": "The Signals My Bot Fired Today — And What It Decided"},
-    {"id": "bot_position_update",   "title": "My Current Open Positions — Why I Entered Each One"},
-    {"id": "bot_refused_trade",     "title": "The Trade My Bot Refused Today — Risk Management in Action"},
-    {"id": "bot_win_loss_update",   "title": "My Bot's Win/Loss This Month — Honest, Unfiltered Numbers"},
-    {"id": "bot_how_decides",       "title": "How I Decide Whether to Trade — My Signal Scoring System"},
-    {"id": "bot_momentum_today",    "title": "Momentum Signals I'm Watching Right Now"},
-    {"id": "bot_risk_in_action",    "title": "How My 2% Risk Rule Saved Me From a Bad Trade Today"},
-    {"id": "bot_paper_progress",    "title": "Paper Trading Progress Update — Week by Week Breakdown"},
-    {"id": "bot_500_scan",          "title": "I Scanned 500 Stocks This Morning — Here's What I Found"},
-    {"id": "bot_forex_update",      "title": "My Forex Bot's Session Results — What the Algorithm Saw"},
-    {"id": "bot_live_transition",   "title": "When My Bot Goes Live — What Has to Be True First"},
-    {"id": "bot_stops_triggered",   "title": "Stop Losses That Triggered This Week — What They Protected"},
-    {"id": "bot_position_sizing",   "title": "How I Calculate Exactly How Much to Buy — Real Numbers"},
-    {"id": "bot_drawdown_check",    "title": "My Drawdown This Month — How I Track and Control It"},
-    {"id": "bot_scan_universe",     "title": "How I Built My 500-Stock Universe and Why These Stocks"},
+    {"id": "bot_refused_trade",     "title": "The Trade My Bot Refused Today"},
+    {"id": "bot_rare_signal",       "title": "My Algorithm Triggered a Rare Alert This Morning"},
+    {"id": "bot_caught_breakout",   "title": "My Bot Caught This Before Everyone Else"},
+    {"id": "bot_risk_saved",        "title": "My Bot's Risk System Just Saved Me From a Big Loss"},
+    {"id": "bot_silent_day",        "title": "My Bot Went Silent Today — Here's What That Means"},
+    {"id": "bot_wrong_call",        "title": "My Bot Got This Trade Wrong — The Full Story"},
+    {"id": "bot_spotted_first",     "title": "My Algorithm Spotted This Before Wall Street Did"},
+    {"id": "bot_500_one_signal",    "title": "My Bot Scanned 500 Stocks — Only One Made It Through"},
+    {"id": "bot_bearish_flip",      "title": "The Day My Bot Went Bearish — What It Saw"},
+    {"id": "bot_worst_day",         "title": "My Bot's Worst Day This Month — Honest Numbers"},
+    {"id": "bot_ai_watching",       "title": "What My AI Is Watching Tomorrow — The Setup Is Building"},
+    {"id": "bot_stop_triggered",    "title": "My Bot Triggered a Stop Loss Today — The Full Story"},
+    {"id": "bot_mistake",           "title": "My Algorithm Made a Mistake. Here's What I Found."},
+    {"id": "bot_big_move",          "title": "My Bot Caught a 34% Move Before It Happened"},
+    {"id": "bot_forex_warning",     "title": "My Forex Bot Triggered a Warning Signal Last Night"},
+    {"id": "bot_risk_rejected",     "title": "My Bot Saw the Signal — Then Risk Management Said No"},
+    {"id": "bot_seven_signals",     "title": "Seven Signals This Week. My Bot Took One."},
+    {"id": "bot_rare_pattern",      "title": "My Bot Caught a Pattern That Forms Once a Month"},
+    {"id": "bot_live_countdown",    "title": "My Bot Is One Decision Away From Going Live"},
+    {"id": "bot_cost_signal",       "title": "The Signal That Almost Cost My Bot $200"},
 ]
 
 # ── Sun: Educational Depth Topics (framed through the bot's lens) ─────────────
@@ -82,19 +87,17 @@ class TopicSelector:
         weekday = today.weekday()   # 0=Mon … 6=Sun
         day     = today.timetuple().tm_yday  # for within-category cycling
 
-        # ── Determine type ────────────────────────────────────────────────────
+        # ── Determine type — 80% bot story, 20% educational ─────────────────
         if force_type:
             t = force_type
-        elif weekday == 1:          # Tuesday → always live daily recap
+        elif weekday == 1:              # Tuesday → live daily recap (bot story with real data)
             t = "daily_recap"
-        elif weekday in (0, 2):     # Mon, Wed → bot brand/update
-            t = "bot"
-        elif weekday in (3, 4):     # Thu, Fri → trending news
-            t = "news"
-        elif weekday == 5:          # Saturday → weekly performance review
+        elif weekday == 5:              # Saturday → weekly performance review (bot story)
             t = "weekly_recap"
-        else:                       # Sunday → educational depth
+        elif weekday == 6:              # Sunday only → educational (20%)
             t = "educational"
+        else:                           # Mon / Wed / Thu / Fri → AI bot story (80%)
+            t = "bot"
 
         # ── Resolve topic ─────────────────────────────────────────────────────
         if t == "daily_recap":
@@ -110,16 +113,7 @@ class TopicSelector:
             log.info(f"Topic type: BOT — {topic['title']}")
             return topic
 
-        if t == "news":
-            topic = self._news_topic(day)
-            if topic:
-                log.info(f"Topic type: NEWS — {topic['title']}")
-                return topic
-            log.warning("NewsAPI unavailable — falling back to bot brand topic")
-            topic = dict(BOT_BRAND_TOPICS[day % len(BOT_BRAND_TOPICS)], type="bot")
-            return topic
-
-        # educational (Sunday)
+        # educational (Sunday only)
         topic = dict(EDUCATIONAL_TOPICS[day % len(EDUCATIONAL_TOPICS)], type="educational")
         log.info(f"Topic type: EDUCATIONAL — {topic['title']}")
         return topic
