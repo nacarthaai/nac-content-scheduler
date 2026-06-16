@@ -5,13 +5,16 @@ Runs 24/7 on Railway.
 
   Monday    4 PM ET → run_long_pipeline()  — generate 10-min long video + cut all 7 weekly shorts
   Tue-Sun   4 PM ET → run_short_upload()   — upload today's pre-cut short from weekly_plan.json
-  POST /fire?mode=long|short               — manual trigger (token-gated)
+  One-time  4 PM ET → run_trailer_upload() — post nacartha_trailer_final.mp4 to all 3 channels
+  POST /fire?mode=long|short|trailer       — manual trigger (token-gated)
+  POST /upload-trailer                     — receive trailer file from curl, save to /tmp
 """
+import cgi
 import logging
 import os
 import sys
 import threading
-from datetime import datetime
+from datetime import datetime, date
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -78,6 +81,9 @@ def run_short_upload():
     """Tue-Sun 4 PM ET — upload today's pre-cut short from weekly_plan.json."""
     if _deploy_guard():
         return
+    if os.environ.get("SKIP_SHORTS_TODAY", "").lower() in ("1", "true", "yes"):
+        log.warning("SKIP_SHORTS_TODAY is set — skipping short upload for today.")
+        return
     log.info("=== Daily short upload (4 PM ET) ===")
     if not _pipeline_lock.acquire(blocking=False):
         log.warning("Pipeline already running — skipping")
@@ -91,6 +97,114 @@ def run_short_upload():
     except Exception as e:
         log.error(f"Short upload failed: {e}", exc_info=True)
         _telegram(f"❌ NacArtha short upload FAILED:\n`{e}`")
+    finally:
+        _pipeline_lock.release()
+
+
+TRAILER_PATH = Path("/tmp/nac_trailer.mp4")
+
+# Metadata for each channel — same video, localised titles
+TRAILER_META = {
+    "en": {
+        "title":       "I Built an AI Trading Bot That Never Sleeps | NacArtha AI Lab",
+        "description": (
+            "Welcome to NacArtha AI Lab — where we build a fully automated AI trading system "
+            "from scratch, live. Every day the system scans hundreds of stocks, identifies RSI "
+            "and EMA crossover signals, and scores every trade before it happens. No emotions. "
+            "Pure data.\n\n"
+            "Paper trading now. Going live soon.\n\n"
+            "#NacArtha #AITrading #AlgoTrading #StockMarket #QuantFinance"
+        ),
+        "tags": ["NacArtha", "AI trading", "algo trading", "stock market", "quant finance"],
+    },
+    "hi": {
+        "title":       "AI ट्रेडिंग बॉट जो कभी नहीं सोता | NacArtha AI Lab",
+        "description": (
+            "NacArtha AI Lab में आपका स्वागत है — जहाँ हम एक पूरी तरह से स्वचालित AI ट्रेडिंग "
+            "सिस्टम बना रहे हैं। हर दिन यह सिस्टम सैकड़ों स्टॉक स्कैन करता है और सिग्नल पहचानता है।\n\n"
+            "#NacArtha #AITrading #AlgoTrading #शेयरबाजार"
+        ),
+        "tags": ["NacArtha", "AI trading", "algo trading", "share market", "quant"],
+    },
+    "te": {
+        "title":       "నిద్రపోని AI ట్రేడింగ్ బాట్ | NacArtha AI Lab",
+        "description": (
+            "NacArtha AI Lab కి స్వాగతం — మేము పూర్తి స్వయంచాలక AI ట్రేడింగ్ సిస్టమ్ "
+            "నిర్మిస్తున్నాము. రోజూ వందల స్టాక్‌లను స్కాన్ చేసి సిగ్నల్స్ గుర్తిస్తుంది.\n\n"
+            "#NacArtha #AITrading #AlgoTrading #స్టాక్‌మార్కెట్"
+        ),
+        "tags": ["NacArtha", "AI trading", "algo trading", "stock market", "Telugu"],
+    },
+}
+
+
+def _check_lipsync_providers():
+    """Log HeyGen and ElevenLabs lip-sync capability for future use."""
+    import requests as _req
+
+    # ── HeyGen ────────────────────────────────────────────────────────────────
+    # HeyGen supports lip-sync via /v2/video/generate with input_type=talking_photo
+    # and audio_url — the avatar's lips move to the provided audio.
+    heygen_key = os.environ.get("HEYGEN_API_KEY", "")
+    if heygen_key:
+        try:
+            r = _req.get(
+                "https://api.heygen.com/v2/avatars",
+                headers={"x-api-key": heygen_key},
+                timeout=10,
+            )
+            if r.status_code == 200:
+                log.info("✓ HeyGen lip-sync AVAILABLE — use /v2/video/generate with audio_url to sync avatar lips to any audio")
+            else:
+                log.warning(f"HeyGen check: HTTP {r.status_code}")
+        except Exception as e:
+            log.warning(f"HeyGen check failed: {e}")
+    else:
+        log.info("HeyGen: HEYGEN_API_KEY not set — skipping check")
+
+    # ── ElevenLabs ────────────────────────────────────────────────────────────
+    # ElevenLabs does NOT offer video lip-sync — audio generation only.
+    # For lip-sync use HeyGen with the ElevenLabs-generated audio as audio_url.
+    log.info("ElevenLabs: audio-only, no native lip-sync. Workflow → ElevenLabs audio → HeyGen talking_photo with audio_url")
+
+
+def run_trailer_upload():
+    """One-time 4 PM ET — upload nacartha_trailer_final.mp4 to all 3 channels."""
+    log.info("=== Trailer upload to 3 channels ===")
+    if not TRAILER_PATH.exists():
+        log.error(f"Trailer not found at {TRAILER_PATH}. Upload it first via POST /upload-trailer")
+        _telegram("❌ Trailer upload FAILED — file not found. POST /upload-trailer first.")
+        return
+    if not _pipeline_lock.acquire(blocking=False):
+        log.warning("Pipeline already running — skipping trailer upload")
+        return
+    try:
+        _check_lipsync_providers()
+
+        from config import settings
+        from engines.upload_engine import UploadEngine
+
+        uploader = UploadEngine(
+            client_id=settings.YOUTUBE_CLIENT_ID,
+            client_secret=settings.YOUTUBE_CLIENT_SECRET,
+            refresh_tokens=settings.YOUTUBE_REFRESH_TOKENS,
+        )
+        results = uploader.upload_all_languages(
+            video_path=TRAILER_PATH,
+            thumbnail_path=Path("/tmp/nac_trailer_thumb.jpg") if Path("/tmp/nac_trailer_thumb.jpg").exists() else None,
+            translations=TRAILER_META,
+            topic_type="educational",
+        )
+        ok    = {lang: url for lang, url in results.items() if url}
+        fails = [lang for lang, url in results.items() if not url]
+        log.info(f"=== Trailer upload done: {ok} ===")
+        msg = "✅ Trailer posted!\n" + "\n".join(f"• [{l}] {u}" for l, u in ok.items())
+        if fails:
+            msg += f"\n⚠️ Failed: {fails}"
+        _telegram(msg)
+    except Exception as e:
+        log.error(f"Trailer upload failed: {e}", exc_info=True)
+        _telegram(f"❌ Trailer upload FAILED:\n`{e}`")
     finally:
         _pipeline_lock.release()
 
@@ -122,6 +236,10 @@ def _fire_pipeline(langs: list, mode: str = "long"):
         log.info(f"=== Manual fire: mode={mode} langs={langs} ===")
         if mode == "short":
             nac_orchestrator.main_short(langs=langs, on_lang_done=_mark_lang_done)
+        elif mode == "trailer":
+            _pipeline_lock.release()   # run_trailer_upload acquires its own lock
+            run_trailer_upload()
+            return
         else:
             nac_orchestrator.main(langs=langs, on_lang_done=_mark_lang_done)
         log.info("=== Manual fire complete ===")
@@ -129,7 +247,8 @@ def _fire_pipeline(langs: list, mode: str = "long"):
         log.error(f"Manual fire failed: {e}", exc_info=True)
         _telegram(f"❌ NacArtha manual fire FAILED:\n`{e}`")
     finally:
-        _pipeline_lock.release()
+        if _pipeline_lock.locked():
+            _pipeline_lock.release()
 
 
 def _start_dashboard_server():
@@ -169,40 +288,73 @@ def _start_dashboard_server():
         def do_POST(self):
             from urllib.parse import urlparse, parse_qs
             parsed = urlparse(self.path)
+
+            # ── Auth helper ───────────────────────────────────────────────────
+            def _authed() -> bool:
+                qs  = parse_qs(parsed.query)
+                tok = qs.get("token", [""])[0]
+                hdr = self.headers.get("x-token", "")
+                return not token or tok == token or hdr == token
+
             if parsed.path == "/fire":
-                qs    = parse_qs(parsed.query)
-                tok   = qs.get("token", [""])[0]
-                if token and tok != token:
-                    body = b"unauthorized"
-                    self.send_response(403)
-                    self.send_header("Content-Type", "text/plain")
-                    self.send_header("Content-Length", str(len(body)))
-                    self.end_headers()
-                    self.wfile.write(body)
+                if not _authed():
+                    self._respond(403, b"unauthorized")
                     return
+                qs          = parse_qs(parsed.query)
                 langs_param = qs.get("langs", ["en,hi,te"])[0]
                 mode        = qs.get("mode",  ["long"])[0]
                 langs = [l.strip() for l in langs_param.split(",") if l.strip()]
-                if _pipeline_lock.locked():
-                    body = b"pipeline already running"
-                    self.send_response(409)
+                if _pipeline_lock.locked() and mode != "trailer":
+                    self._respond(409, b"pipeline already running")
                 else:
                     threading.Thread(
                         target=_fire_pipeline, args=(langs, mode), daemon=True
                     ).start()
-                    body = f"pipeline fired: mode={mode} langs={langs}".encode()
-                    self.send_response(200)
-                self.send_header("Content-Type", "text/plain")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
+                    self._respond(200, f"pipeline fired: mode={mode} langs={langs}".encode())
+
+            elif parsed.path == "/upload-trailer":
+                # Accept multipart file upload and save to TRAILER_PATH
+                # Usage: curl -X POST .../upload-trailer \
+                #              -F "file=@nacartha_trailer_final.mp4" \
+                #              -H "x-token: nacartha"
+                if not _authed():
+                    self._respond(403, b"unauthorized")
+                    return
+                ctype = self.headers.get("Content-Type", "")
+                length = int(self.headers.get("Content-Length", 0))
+                if "multipart/form-data" in ctype:
+                    form = cgi.FieldStorage(
+                        fp=self.rfile,
+                        headers=self.headers,
+                        environ={"REQUEST_METHOD": "POST", "CONTENT_TYPE": ctype},
+                    )
+                    field = form.get("file") or form.get("video")
+                    if field and field.file:
+                        TRAILER_PATH.write_bytes(field.file.read())
+                        size_mb = TRAILER_PATH.stat().st_size / 1024 / 1024
+                        log.info(f"Trailer received: {size_mb:.1f} MB → {TRAILER_PATH}")
+                        self._respond(200, f"trailer saved ({size_mb:.1f} MB). POST /fire?mode=trailer to upload now.".encode())
+                    else:
+                        self._respond(400, b"multipart field 'file' not found")
+                elif length > 0:
+                    # Raw body upload
+                    data = self.rfile.read(length)
+                    TRAILER_PATH.write_bytes(data)
+                    size_mb = len(data) / 1024 / 1024
+                    log.info(f"Trailer received (raw): {size_mb:.1f} MB → {TRAILER_PATH}")
+                    self._respond(200, f"trailer saved ({size_mb:.1f} MB). POST /fire?mode=trailer to upload now.".encode())
+                else:
+                    self._respond(400, b"no file data received")
+
             else:
-                body = b"not found"
-                self.send_response(404)
-                self.send_header("Content-Type", "text/plain")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
+                self._respond(404, b"not found")
+
+        def _respond(self, code: int, body: bytes):
+            self.send_response(code)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(("0.0.0.0", port), Handler)
@@ -231,8 +383,25 @@ scheduler.add_job(
 _start_dashboard_server()
 
 now_ny = datetime.now(NY_TZ)
+
+# One-time trailer job — fires today at 4 PM ET if TRAILER_UPLOAD_DATE matches today
+_trailer_date_env = os.environ.get("TRAILER_UPLOAD_DATE", "")   # e.g. "2026-06-16"
+_today_str        = date.today().strftime("%Y-%m-%d")
+if _trailer_date_env == _today_str:
+    from apscheduler.triggers.date import DateTrigger
+    _fire_at = datetime.now(NY_TZ).replace(hour=16, minute=0, second=0, microsecond=0)
+    if _fire_at > datetime.now(NY_TZ):
+        scheduler.add_job(
+            run_trailer_upload,
+            DateTrigger(run_date=_fire_at, timezone="America/New_York"),
+            max_instances=1,
+        )
+        log.info(f"Trailer upload scheduled for {_fire_at.strftime('%Y-%m-%d %H:%M')} ET")
+    else:
+        log.warning(f"TRAILER_UPLOAD_DATE={_trailer_date_env} but 4PM ET already passed — trigger manually: POST /fire?mode=trailer&token=...")
+
 log.info(f"NacArtha Scheduler — Mon 4PM=long video | Tue-Sun 4PM=daily short | Started {now_ny.strftime('%H:%M')} ET")
-log.info("Manual: POST /fire?mode=long|short&token=... Missed jobs SKIPPED — no catch-up.")
+log.info("Manual: POST /fire?mode=long|short|trailer&token=... Missed jobs SKIPPED — no catch-up.")
 
 try:
     scheduler.start()
