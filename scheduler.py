@@ -197,10 +197,28 @@ def run_trailer_upload():
         )
         ok    = {lang: url for lang, url in results.items() if url}
         fails = [lang for lang, url in results.items() if not url]
-        log.info(f"=== Trailer upload done: {ok} ===")
-        msg = "✅ Trailer posted!\n" + "\n".join(f"• [{l}] {u}" for l, u in ok.items())
+        log.info(f"=== YouTube trailer upload done: {ok} ===")
+
+        # ── Social platforms ──────────────────────────────────────────────────
+        from engines.social_engine import SocialEngine
+        social_caption = (
+            "Hey! Nac here 👋 Welcome to NacArtha AI Lab — building a fully automated "
+            "AI trading system from scratch, live.\n\n"
+            "📊 500+ stocks scanned daily • 🤖 RSI + EMA signals • 📈 Going live soon\n\n"
+            "Follow for updates! #NacArtha #AITrading #AlgoTrading #StockMarket"
+        )
+        social = SocialEngine()
+        social_results = social.post_all(
+            video_path=TRAILER_PATH,
+            caption=social_caption,
+            title=TRAILER_META["en"]["title"],
+        )
+
+        msg = "✅ Trailer posted!\n"
+        msg += "\n".join(f"• [YT {l}] {u}" for l, u in ok.items())
+        msg += "\n" + "\n".join(f"• [{p}] {u or 'skipped'}" for p, u in social_results.items())
         if fails:
-            msg += f"\n⚠️ Failed: {fails}"
+            msg += f"\n⚠️ YT Failed: {fails}"
         _telegram(msg)
     except Exception as e:
         log.error(f"Trailer upload failed: {e}", exc_info=True)
