@@ -28,7 +28,7 @@ _JSON_SCHEMA = """
   "long_scenes": [
     {{
       "id": 1,
-      "narration": "3-5 sentences, 25-35 words",
+      "narration": "8-12 sentences, 90-120 words",
       "visual_prompt": "Illustrated scene composition — see VISUAL PROMPT RULES below",
       "scene_type": "nac_face",
       "chart_key": null,
@@ -109,8 +109,9 @@ Ask yourself:
 If any answer is NO — rewrite.
 
 SCENE COUNT AND LENGTH:
-- long_scenes: exactly 12 scenes. Total narration 450-550 words (3-5 minutes at natural speaking pace).
-- NO short_scenes — Shorts are automatically cut from the first 60 seconds of the long video.
+- long_scenes: exactly 12 scenes. Total narration 1200-1400 words (9-11 minutes at natural speaking pace).
+- Each scene narration: 90-120 words (8-12 spoken sentences). NEVER less than 80 words per scene.
+- NO short_scenes — Shorts are handled separately.
 - emotion: one of clarity | curiosity | confidence | focus | excitement | insight | tension
 - pace: one of hook | normal | reveal | cta
 
@@ -243,14 +244,14 @@ Think: Netflix episode — not finance seminar.
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
 
-Scene-by-scene execution:
-- Scene 1  (hook, nac_face):  INTRO RULE phrase → the single most dramatic thing the bot did today. No market summary. Pure tension.
-- Scene 2  (mystery):         Plant the open question. "There was one moment I wasn't sure my system would hold — I'll show you the exact number."
-- Scene 3  (mystery):         Deepen the mystery. Give context without resolution. Build the "why?" in the viewer's head.
-- Scenes 4-7 (investigation): Follow the bot's process step by step. Signals scanned. What was flagged. What was rejected. What risk management did.
-- Scenes 8-10 (reveal):       The payoff — the exact stat that answers the mystery. text_overlay MUST show the number (+34%, $55 loss, score: 78, 0 trades, etc.)
-- Scene 11 (lesson):          One concrete reflection — what today means, what it confirmed, what changes tomorrow.
-- Scene 12 (cta, nac_face):   OUTRO RULE word-for-word + 1-sentence tease of what to watch for next.
+Scene-by-scene execution (each scene = 90-120 words, fully developed — no thin scenes):
+- Scene 1  (hook, nac_face):  INTRO RULE phrase → the single most dramatic thing the bot did today. Build immediate tension. 90-120 words.
+- Scene 2  (mystery):         Plant the open question. Set up what the viewer doesn't know yet. Give enough context to hook them. 90-120 words.
+- Scene 3  (mystery):         Deepen the mystery. Add background on the situation without resolving it. Build dread or anticipation. 90-120 words.
+- Scenes 4-7 (investigation): Follow the bot's process step by step — each scene covers ONE part of the investigation in full detail. 90-120 words each.
+- Scenes 8-10 (reveal):       The payoff — one specific stat per scene, building to the full answer. text_overlay MUST show the number. 90-120 words each.
+- Scene 11 (lesson):          One concrete takeaway, fully explained — not just stated. Why it matters, what changed. 90-120 words.
+- Scene 12 (cta, nac_face):   OUTRO RULE word-for-word + 2-3 sentences teasing next episode. 90-120 words.
 """
 
 # ── Tue: Daily recap ──────────────────────────────────────────────────────────
@@ -267,7 +268,7 @@ Be honest — wins, losses, rejections, silence. Viewers follow this bot because
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
 
-Scene-by-scene execution:
+Scene-by-scene execution (CRITICAL: every scene must be 90-120 words — no thin scenes, no short narrations):
 - Scene 1  (hook, nac_face): INTRO RULE phrase → today's single most dramatic bot decision in one sentence.
 - Scene 2-3 (mystery):       Tease the most interesting moment — plant the question without answering it.
 - Scenes 4-8 (investigation): What the bot scanned → what fired → what got blocked → risk management → the close.
@@ -291,7 +292,7 @@ Viewers have followed all week — give them the full story arc.
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
 
-Scene-by-scene execution:
+Scene-by-scene execution (CRITICAL: every scene must be 90-120 words — no thin scenes, no short narrations):
 - Scene 1  (hook, nac_face): INTRO RULE phrase → the week's single most dramatic bot moment.
 - Scene 2-3 (mystery):       Tease the worst or strangest moment of the week — don't reveal yet.
 - Scenes 4-8 (investigation): Day-by-day: best signal → best trade → worst moment → risk protection → close.
@@ -318,7 +319,7 @@ The event is context. The bot's reaction is the story.
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
 
-Scene-by-scene execution:
+Scene-by-scene execution (CRITICAL: every scene must be 90-120 words — no thin scenes, no short narrations):
 - Scene 1  (hook, nac_face): INTRO RULE phrase → the single most dramatic thing the bot did in response to this event.
 - Scene 2-3 (mystery):       Tease what the bot detected — something most traders wouldn't have seen yet.
 - Scenes 4-8 (investigation): What the event meant for momentum/volume/RSI → what signals fired or died → what the bot decided.
@@ -385,7 +386,7 @@ BIP ABSOLUTE RULES
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
 
-Scene-by-scene execution:
+Scene-by-scene execution (CRITICAL: every scene must be 90-120 words — no thin scenes, no short narrations):
 - Scene 1  (hook, nac_face): INTRO RULE phrase → the single most surprising honest thing about this episode.
 - Scene 2-3 (mystery): Plant the open loop without answering it. Build the "why?" in the viewer's mind.
 - Scenes 4-7 (investigation): Walk through the real process. Specific. Step by step. No vague statements.
