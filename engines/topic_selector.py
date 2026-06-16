@@ -22,27 +22,35 @@ _LAUNCH_DATE = date(2026, 6, 16)
 BIP_CALENDAR = [
     {
         "id":    "bip_w1_reveal",
-        "title": "I Built an AI Trading Bot — Here Are the First Real Trades",
+        "title": "I've Been Running an AI Trading Bot in Secret. Here's Everything.",
         "type":  "build_in_public",
         "week":  1,
+        "angle": "reveal",
+        "notes": "Paper trading. No trade results yet. Story = what the bot IS — scale, architecture, why built. No fake numbers.",
     },
     {
         "id":    "bip_w2_results",
-        "title": "7 Days Live: My AI Bot's First Real Performance Report",
+        "title": "My AI Bot's First Week: Real Paper Trades, Real Numbers, I'm Hiding Nothing",
         "type":  "build_in_public",
         "week":  2,
+        "angle": "first_results",
+        "notes": "Pull actual Alpaca paper data. Win rate, signals fired, trades taken. Honest — show losses too.",
     },
     {
-        "id":    "bip_w3_worst",
-        "title": "The Worst Thing My AI Bot Did This Month — Full Breakdown",
+        "id":    "bip_w3_mistake",
+        "title": "My Bot Made the Wrong Call. Here's Exactly What Broke.",
         "type":  "build_in_public",
         "week":  3,
+        "angle": "mistake",
+        "notes": "Find worst paper trade from week 2. Break down signal score, RSI, EMA. Show the algorithm's reasoning failing.",
     },
     {
-        "id":    "bip_w4_month",
-        "title": "My AI Bot's First Month: Honest P&L, Win Rate, What Changed",
+        "id":    "bip_w4_decision",
+        "title": "30 Days of Paper Trading. Do I Go Live With Real Money?",
         "type":  "build_in_public",
         "week":  4,
+        "angle": "decision",
+        "notes": "Month 1 paper performance — Sharpe, drawdown, win rate. End on cliffhanger: going live or not?",
     },
 ]
 

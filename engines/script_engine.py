@@ -331,38 +331,67 @@ Scene-by-scene execution:
 # ── Mon (BIP weeks 1-4): Build in Public episode ─────────────────────────────
 _BUILD_IN_PUBLIC_PROMPT = _NAC_PERSONA + """
 
-Create a YouTube video script for this Build-In-Public episode: "{title}"
+Create a YouTube video script for this Build-In-Public episode.
 
-This is a BUILD IN PUBLIC episode — a Netflix-style documentary of the bot's real journey.
-No invented numbers. Real win rates, real P&L, real mistakes. Show the messy truth.
-The viewer is following this bot's story week by week. Reward their loyalty with raw honesty.
+Title: "{title}"
+Angle: "{angle}"
+Context: "{notes}"
 
-Tone: Calm. Confident. Zero hype. This is transparency, not marketing.
-Think: "The Social Network" meets "How I Built This" — personal, real, slightly uncomfortable.
+This is a BUILD IN PUBLIC series — a Netflix-style documentary of building a real AI trading bot.
+Zero hype. Zero invented numbers. Raw honesty about what the bot does, what works, what doesn't.
+The viewer is following this journey week by week. Every episode must reward that loyalty with truth.
+
+Tone: Calm. Confident. Personal. Like a founder talking to their closest followers.
+Think: "How I Built This" meets "The Social Network" — real stakes, real process, real outcomes.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ANGLE-SPECIFIC GUIDANCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If angle = "reveal" (Week 1 — introducing the bot):
+  - DO NOT talk about trade results — there are none yet to show honestly
+  - The story is WHAT THE BOT IS: what it scans (500+ stocks, 8 forex pairs every 2 min),
+    how it decides (momentum score, volume surge, RSI, EMA crossovers), why it was built
+  - The hook is the SCALE and the SECRECY: "I've been running this thing 24/7 for weeks
+    and nobody knew. Here's everything it does."
+  - Reveal scenes: show the architecture, signal flow, risk rules — these ARE the numbers
+  - text_overlay: "500+ stocks", "8 forex pairs", "Every 2 minutes", "Max 2% risk/trade"
+
+If angle = "first_results":
+  - Lead with the most surprising paper trade result — good or bad
+  - Show real Alpaca data: signals fired, trades taken, win rate, paper P&L
+  - Be honest about losses — that is the brand, not a weakness
+  - text_overlay: actual paper stats
+
+If angle = "mistake":
+  - Find the single worst paper trade decision and break it apart completely
+  - Show signal score, what the algorithm saw, why it was wrong
+  - The lesson must be specific — not "I learned from it" but "I changed X because of it"
+
+If angle = "decision":
+  - Month 1 paper performance review with real numbers
+  - End on the go-live cliffhanger — leave the answer for next episode
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BIP ABSOLUTE RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- NEVER invent trade results, P&L numbers, or win rates that don't exist yet
+- NEVER say "real trades" when on paper trading — say "paper trades" or "test trades"
+- Every reveal scene needs a specific stat in text_overlay — architecture stats are fine for Week 1
+- The conflict is always: what I expected vs what actually happened
+- Student scenes: NOT used in BIP episodes
+- DO NOT oversell. Honest bad news beats dishonest good news every time.
 
 OUTPUT: Return ONLY valid JSON matching this schema:
 """ + _JSON_SCHEMA + "\n\n" + _RULES + """
 
-Episode guidance:
-- Scene 1  (hook, nac_face): INTRO RULE phrase → the single most surprising/honest thing from this BIP episode.
-  Examples: "My bot made 4 trades this week. Lost on 3 of them. Here's why I'm not stopping."
-            "Seven days of paper trading. The P&L is not what I expected. At all."
-- Scene 2-3 (mystery): Plant the open loop — hint at the outcome without revealing it yet.
-  "There was one decision that cost more than I thought — and it wasn't even a bad signal."
-- Scenes 4-7 (investigation): Walk through the real process step by step.
-  What the bot actually did. Real signals, real trades, real rejections. Specific numbers.
-- Scenes 8-10 (reveal): The honest numbers. P&L, win rate, drawdown, Sharpe. Don't round up.
-  text_overlay: real stat ("+$247", "Win Rate: 43%", "Max DD: -2.1%", "Sharpe: 0.8")
-- Scene 11 (lesson): What building this bot actually taught me — one honest insight.
-  Not "I learned a lot." A specific thing that changed or surprised me.
-- Scene 12 (cta, nac_face): OUTRO RULE word-for-word + what the next BIP episode will cover.
-
-BIP RULES:
-- NEVER invent numbers. Use placeholders like [WEEK_PNL], [WIN_RATE], [TRADE_COUNT] if real data unavailable.
-- Every reveal scene must have a specific stat in text_overlay — no empty numbers.
-- The conflict is always: Bot's logic vs Real-world results. Show both sides.
-- DO NOT oversell. If results are bad, say they are bad. That is the brand.
-- Student scenes: NOT used in BIP episodes.
+Scene-by-scene execution:
+- Scene 1  (hook, nac_face): INTRO RULE phrase → the single most surprising honest thing about this episode.
+- Scene 2-3 (mystery): Plant the open loop without answering it. Build the "why?" in the viewer's mind.
+- Scenes 4-7 (investigation): Walk through the real process. Specific. Step by step. No vague statements.
+- Scenes 8-10 (reveal): The honest payoff that resolves the mystery. Real stats, real architecture, real outcomes.
+- Scene 11 (lesson): One specific thing I know now that I didn't know before building this.
+- Scene 12 (cta, nac_face): OUTRO RULE word-for-word + one-sentence tease of next week's episode.
 """
 
 # ── Sun: Educational depth ────────────────────────────────────────────────────
@@ -454,6 +483,12 @@ class ScriptEngine:
                 news_headline=topic.get("news_headline", topic["title"]),
                 news_summary=topic.get("news_summary", ""),
                 news_source=topic.get("news_source", ""),
+            )
+        elif topic_type == "build_in_public":
+            prompt = prompt_template.format(
+                title=topic["title"],
+                angle=topic.get("angle", "reveal"),
+                notes=topic.get("notes", "Paper trading. Be honest."),
             )
         else:
             prompt = prompt_template.format(title=topic["title"], topic_id=topic.get("id", ""))
