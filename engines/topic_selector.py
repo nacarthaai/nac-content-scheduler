@@ -1,10 +1,11 @@
 """
-TopicSelector — Weekday-based content schedule for NacArtha.
+TopicSelector — Weekly content schedule for NacArtha.
 
-80% = AI Bot Story Videos  (Mon / Tue / Wed / Thu / Fri / Sat)
-20% = Educational          (Sun only)
+Schedule (new as of 2026-06-16):
+  Monday 4 PM ET  → 1 long video (10 min) — bot story or BIP episode
+  Tue-Sun 4 PM ET → 1 short (1 min) — ffmpeg cut from Monday's long video
 
-The AI Bot is the hero. Every video answers "What did the bot do today?" — not "What happened in the market?"
+BIP Weeks 1-4 (launch calendar), then ongoing bot brand topics weekly.
 """
 import logging
 import os
@@ -13,6 +14,37 @@ from datetime import date
 import requests
 
 log = logging.getLogger("topic_selector")
+
+# Channel launch date — Week 1 starts here (first Monday)
+_LAUNCH_DATE = date(2026, 6, 16)
+
+# ── BIP (Build In Public) launch calendar — Weeks 1-4 ───────────────────────
+BIP_CALENDAR = [
+    {
+        "id":    "bip_w1_reveal",
+        "title": "I Built an AI Trading Bot — Here Are the First Real Trades",
+        "type":  "build_in_public",
+        "week":  1,
+    },
+    {
+        "id":    "bip_w2_results",
+        "title": "7 Days Live: My AI Bot's First Real Performance Report",
+        "type":  "build_in_public",
+        "week":  2,
+    },
+    {
+        "id":    "bip_w3_worst",
+        "title": "The Worst Thing My AI Bot Did This Month — Full Breakdown",
+        "type":  "build_in_public",
+        "week":  3,
+    },
+    {
+        "id":    "bip_w4_month",
+        "title": "My AI Bot's First Month: Honest P&L, Win Rate, What Changed",
+        "type":  "build_in_public",
+        "week":  4,
+    },
+]
 
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")
 
@@ -81,6 +113,39 @@ EDUCATIONAL_TOPICS = [
 
 
 class TopicSelector:
+
+    def select_long(self, force_type: str = "") -> dict:
+        """Select the weekly long-video topic (called every Monday)."""
+        if force_type:
+            # Manual override — resolve from bot or educational pools
+            today = date.today()
+            day   = today.timetuple().tm_yday
+            if force_type == "educational":
+                topic = dict(EDUCATIONAL_TOPICS[day % len(EDUCATIONAL_TOPICS)], type="educational")
+            elif force_type == "build_in_public":
+                days_since  = max(0, (today - _LAUNCH_DATE).days)
+                week_num    = days_since // 7 + 1
+                bip_idx     = min(week_num - 1, len(BIP_CALENDAR) - 1)
+                topic       = BIP_CALENDAR[bip_idx]
+            else:
+                topic = dict(BOT_BRAND_TOPICS[day % len(BOT_BRAND_TOPICS)], type="bot")
+            log.info(f"Long topic (forced={force_type}): {topic['title']}")
+            return topic
+
+        today        = date.today()
+        days_since   = max(0, (today - _LAUNCH_DATE).days)
+        week_num     = days_since // 7 + 1  # 1-indexed
+
+        if week_num <= len(BIP_CALENDAR):
+            topic = BIP_CALENDAR[week_num - 1]
+            log.info(f"Long topic: BIP Week {week_num} — {topic['title']}")
+            return topic
+
+        # After BIP: rotate through bot brand topics weekly
+        day   = today.timetuple().tm_yday
+        topic = dict(BOT_BRAND_TOPICS[day % len(BOT_BRAND_TOPICS)], type="bot")
+        log.info(f"Long topic: BOT — {topic['title']}")
+        return topic
 
     def select(self, force_type: str = "") -> dict:
         today   = date.today()

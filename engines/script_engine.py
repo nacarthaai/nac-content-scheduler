@@ -328,6 +328,43 @@ Scene-by-scene execution:
 - text_overlay: signal scores and market impact numbers on every reveal scene.
 """
 
+# ── Mon (BIP weeks 1-4): Build in Public episode ─────────────────────────────
+_BUILD_IN_PUBLIC_PROMPT = _NAC_PERSONA + """
+
+Create a YouTube video script for this Build-In-Public episode: "{title}"
+
+This is a BUILD IN PUBLIC episode — a Netflix-style documentary of the bot's real journey.
+No invented numbers. Real win rates, real P&L, real mistakes. Show the messy truth.
+The viewer is following this bot's story week by week. Reward their loyalty with raw honesty.
+
+Tone: Calm. Confident. Zero hype. This is transparency, not marketing.
+Think: "The Social Network" meets "How I Built This" — personal, real, slightly uncomfortable.
+
+OUTPUT: Return ONLY valid JSON matching this schema:
+""" + _JSON_SCHEMA + "\n\n" + _RULES + """
+
+Episode guidance:
+- Scene 1  (hook, nac_face): INTRO RULE phrase → the single most surprising/honest thing from this BIP episode.
+  Examples: "My bot made 4 trades this week. Lost on 3 of them. Here's why I'm not stopping."
+            "Seven days of paper trading. The P&L is not what I expected. At all."
+- Scene 2-3 (mystery): Plant the open loop — hint at the outcome without revealing it yet.
+  "There was one decision that cost more than I thought — and it wasn't even a bad signal."
+- Scenes 4-7 (investigation): Walk through the real process step by step.
+  What the bot actually did. Real signals, real trades, real rejections. Specific numbers.
+- Scenes 8-10 (reveal): The honest numbers. P&L, win rate, drawdown, Sharpe. Don't round up.
+  text_overlay: real stat ("+$247", "Win Rate: 43%", "Max DD: -2.1%", "Sharpe: 0.8")
+- Scene 11 (lesson): What building this bot actually taught me — one honest insight.
+  Not "I learned a lot." A specific thing that changed or surprised me.
+- Scene 12 (cta, nac_face): OUTRO RULE word-for-word + what the next BIP episode will cover.
+
+BIP RULES:
+- NEVER invent numbers. Use placeholders like [WEEK_PNL], [WIN_RATE], [TRADE_COUNT] if real data unavailable.
+- Every reveal scene must have a specific stat in text_overlay — no empty numbers.
+- The conflict is always: Bot's logic vs Real-world results. Show both sides.
+- DO NOT oversell. If results are bad, say they are bad. That is the brand.
+- Student scenes: NOT used in BIP episodes.
+"""
+
 # ── Sun: Educational depth ────────────────────────────────────────────────────
 _EDUCATIONAL_PROMPT = _NAC_PERSONA + """
 
@@ -357,11 +394,12 @@ Episode guidance:
 """
 
 _PROMPT_MAP = {
-    "bot":          _BOT_PROMPT,
-    "daily_recap":  _DAILY_RECAP_PROMPT,
-    "weekly_recap": _WEEKLY_RECAP_PROMPT,
-    "news":         _NEWS_PROMPT,
-    "educational":  _EDUCATIONAL_PROMPT,
+    "bot":              _BOT_PROMPT,
+    "build_in_public":  _BUILD_IN_PUBLIC_PROMPT,
+    "daily_recap":      _DAILY_RECAP_PROMPT,
+    "weekly_recap":     _WEEKLY_RECAP_PROMPT,
+    "news":             _NEWS_PROMPT,
+    "educational":      _EDUCATIONAL_PROMPT,
 }
 
 # ── Translation prompts ───────────────────────────────────────────────────────

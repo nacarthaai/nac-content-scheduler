@@ -1,14 +1,12 @@
 """
-NacArtha Cinematic Pipeline v5
+NacArtha Cinematic Pipeline v6
 
-Three video types, each with different asset sources:
+Schedule:
+  Monday 4 PM ET  → main()       — generate long video, cut 7 weekly shorts, upload long + Monday short
+  Tue-Sun 4 PM ET → main_short() — upload pre-cut short for today from weekly_plan.json
 
-  bot_performance → HeyGen Nac clips + yfinance/trading system charts + Veo trading backgrounds
-  educational     → HeyGen Nac + student clips + yfinance example charts + Veo classroom backgrounds
-  news            → HeyGen Nac clips + real news images (NewsAPI) + yfinance market impact charts
-
-Shorts: cut from first 60s of long video (portrait 1080×1920).
-Same clips used across EN/HI/TE — only audio differs per language.
+Video types: bot | build_in_public | educational | daily_recap | weekly_recap | news
+Shorts: ffmpeg cuts from the long video only — no separate generation.
 """
 from __future__ import annotations
 
@@ -44,6 +42,19 @@ log = logging.getLogger("nac_orchestrator")
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 
+# Seconds from start of long video where each day's short begins.
+# Assumes ~90s/scene (12 scenes × 90s ≈ 18 min; cuts biased toward key moments).
+_SHORT_OFFSETS = {
+    "mon": 0,    # hook   — scene 1
+    "tue": 90,   # mystery — scenes 2-3
+    "wed": 180,  # investigation — scenes 4-5
+    "thu": 270,  # investigation — scenes 6-7
+    "fri": 360,  # reveal approach — scenes 8-9
+    "sat": 450,  # reveal — scenes 9-10
+    "sun": 540,  # lesson + CTA — scenes 11-12
+}
+_WEEKDAY_NAMES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
 
 def main(langs: list = None, on_lang_done=None):
     try:
@@ -64,6 +75,8 @@ def main(langs: list = None, on_lang_done=None):
     run_id  = datetime.now().strftime("nac_%Y%m%d_%H%M%S")
     run_dir = OUTPUT_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
+
+    _cleanup_old_runs(keep_days=7)
 
     log.info(f"=== NacArtha Pipeline  run={run_id}  langs={langs} ===")
 
@@ -89,13 +102,13 @@ def main(langs: list = None, on_lang_done=None):
 
     # ── 1. Topic + script ────────────────────────────────────────────────────
     if args.topic:
-        from engines.topic_selector import BOT_BRAND_TOPICS, EDUCATIONAL_TOPICS
-        all_topics = BOT_BRAND_TOPICS + EDUCATIONAL_TOPICS
+        from engines.topic_selector import BOT_BRAND_TOPICS, EDUCATIONAL_TOPICS, BIP_CALENDAR
+        all_topics = BOT_BRAND_TOPICS + EDUCATIONAL_TOPICS + BIP_CALENDAR
         topic = next((t for t in all_topics if t["id"] == args.topic), None)
         if not topic:
             topic = {"id": args.topic, "title": args.topic, "type": "bot"}
     else:
-        topic = topic_selector.select(force_type=getattr(args, "topic_type", ""))
+        topic = topic_selector.select_long(force_type=getattr(args, "topic_type", ""))
 
     video_type = topic.get("type", "bot")
     log.info(f"Topic [{video_type}]: {topic.get('title', '')}")
@@ -115,8 +128,10 @@ def main(langs: list = None, on_lang_done=None):
     )
 
     # ── 4. Per-language pipeline ──────────────────────────────────────────────
-    results = {}
-    en_video_url = ""  # HeyGen-hosted URL for EN video — used for v2/video_translate
+    results      = {}
+    lang_titles  = {}   # lang → translated title (for weekly plan)
+    long_paths   = {}   # lang → long.mp4 path (for post-loop short cutting)
+    en_video_url = ""   # HeyGen-hosted URL for EN video — used for v2/video_translate
 
     for lang in langs:
         log.info(f"\n{'='*55}\n  [{lang.upper()}] Pipeline\n{'='*55}")
@@ -223,8 +238,13 @@ def main(langs: list = None, on_lang_done=None):
                 )
                 import shutil; shutil.copy2(assembled_path, long_path)
 
-            # Cut short from long video
-            log.info(f"  [{lang}] Cutting Short…")
+            # Track for weekly plan
+            long_paths[lang]  = long_path
+            lang_titles[lang] = script.get("title", en_script["title"])
+
+            # Cut Monday's short (first 60s = hook scene)
+            short_path = lang_dir / "short_mon.mp4"
+            log.info(f"  [{lang}] Cutting Monday short (hook, 0-60s)…")
             assembler.cut_short(long_path, short_path)
 
             # Thumbnail
@@ -245,7 +265,7 @@ def main(langs: list = None, on_lang_done=None):
                 + "\n\nMusic: Kevin MacLeod (incompetech.com) — Licensed under Creative Commons: By Attribution 3.0"
             )
 
-            log.info(f"  [{lang}] Uploading…")
+            log.info(f"  [{lang}] Uploading long video…")
             long_urls = uploader.upload_all_languages(
                 video_path=long_path,
                 thumbnail_path=thumb_path,
@@ -255,6 +275,7 @@ def main(langs: list = None, on_lang_done=None):
                     "tags":        script.get("tags", []),
                 }},
             )
+            log.info(f"  [{lang}] Uploading Monday short…")
             short_urls = uploader.upload_all_languages(
                 video_path=short_path,
                 thumbnail_path=None,
@@ -279,7 +300,10 @@ def main(langs: list = None, on_lang_done=None):
             log.error(f"[{lang.upper()}] FAILED: {e}", exc_info=True)
             results[lang] = {"status": "error", "error": str(e)}
 
-    # ── 5. Summary ────────────────────────────────────────────────────────────
+    # ── 5. Cut Tue-Sun shorts + save weekly plan ─────────────────────────────
+    _build_weekly_plan(run_id, topic, en_script, lang_titles, long_paths, run_dir, results, assembler, langs)
+
+    # ── 6. Summary ────────────────────────────────────────────────────────────
     summary = {"run_id": run_id, "topic": en_script.get("title"), "results": results}
     (run_dir / "run_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2))
     _notify_telegram(summary)
@@ -287,6 +311,149 @@ def main(langs: list = None, on_lang_done=None):
     log.info("\n=== PIPELINE COMPLETE ===")
     for lang, r in results.items():
         log.info(f"  [{lang.upper()}] {r.get('status')}: {r.get('long_url') or r.get('error', '')}")
+
+
+# ── Weekly shorts builder + plan ─────────────────────────────────────────────
+
+def _build_weekly_plan(
+    run_id: str,
+    topic: dict,
+    en_script: dict,
+    lang_titles: dict,
+    long_paths: dict,
+    run_dir: Path,
+    results: dict,
+    assembler,
+    langs: list,
+) -> None:
+    """Cut Tue-Sun scene shorts from all lang long videos, save weekly_plan.json."""
+    from datetime import date as _date
+    week_str = _date.today().strftime("%Y-W%W")
+
+    days    = list(_SHORT_OFFSETS.keys())     # mon..sun
+    plan_shorts = {}
+    for day in days:
+        offset = _SHORT_OFFSETS[day]
+        day_paths = {}
+        for lang in langs:
+            lp = long_paths.get(lang)
+            if not lp or not lp.exists():
+                continue
+            lang_dir   = run_dir / lang
+            short_path = lang_dir / f"short_{day}.mp4"
+            if day == "mon":
+                # Already cut as short_mon.mp4 during the per-lang loop
+                if not short_path.exists():
+                    # fallback: re-cut it
+                    assembler.cut_scene_short(lp, 0, 60, short_path)
+            else:
+                log.info(f"  [{lang}] Cutting {day.upper()} short (offset={offset}s)…")
+                assembler.cut_scene_short(lp, offset, 60, short_path)
+            day_paths[lang] = str(short_path)
+        plan_shorts[day] = {
+            "offset":   offset,
+            "paths":    day_paths,
+            "uploaded": day == "mon",  # Monday's short already uploaded
+        }
+
+    long_urls = {lang: r.get("long_url", "") for lang, r in results.items()}
+    plan = {
+        "run_id":    run_id,
+        "week":      week_str,
+        "topic_id":  topic.get("id", ""),
+        "topic":     en_script.get("title", ""),
+        "titles":    lang_titles,
+        "long_urls": long_urls,
+        "shorts":    plan_shorts,
+    }
+    plan_path = OUTPUT_DIR / f"weekly_plan_{week_str.replace('-', '_')}.json"
+    plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2))
+    log.info(f"Weekly plan saved → {plan_path.name}")
+
+
+def _load_current_weekly_plan():
+    """Return (plan_dict, plan_path) for the most recent weekly_plan, or None if not found."""
+    plans = sorted(OUTPUT_DIR.glob("weekly_plan_*.json"), reverse=True)
+    if not plans:
+        log.warning("No weekly_plan found — cannot upload short")
+        return None
+    plan = json.loads(plans[0].read_text())
+    log.info(f"Loaded weekly plan: {plans[0].name} (topic: {plan.get('topic', '?')})")
+    return plan, plans[0]
+
+
+def main_short(langs: list = None, on_lang_done=None) -> None:
+    """Upload today's pre-cut short from the current weekly plan (Tue-Sun)."""
+    try:
+        import static_ffmpeg
+        static_ffmpeg.add_paths()
+    except ImportError:
+        pass
+
+    if langs is None:
+        langs = ["en", "hi", "te"]
+
+    result = _load_current_weekly_plan()
+    if result is None:
+        log.error("No weekly plan — skipping short upload")
+        return
+    plan, plan_path = result
+
+    from datetime import date as _date
+    today   = _date.today()
+    day_key = _WEEKDAY_NAMES[today.weekday()]   # "mon" / "tue" / …
+    log.info(f"Daily short upload — day={day_key.upper()}")
+
+    day_entry = plan.get("shorts", {}).get(day_key)
+    if not day_entry:
+        log.error(f"No short entry for {day_key} in plan")
+        return
+    if day_entry.get("uploaded"):
+        log.info(f"Short for {day_key} already uploaded — done")
+        return
+
+    uploader = UploadEngine(
+        client_id=os.environ.get("YOUTUBE_CLIENT_ID", ""),
+        client_secret=os.environ.get("YOUTUBE_CLIENT_SECRET", ""),
+        refresh_tokens={
+            "en": os.environ.get("YOUTUBE_REFRESH_TOKEN_EN", ""),
+            "hi": os.environ.get("YOUTUBE_REFRESH_TOKEN_HI", ""),
+            "te": os.environ.get("YOUTUBE_REFRESH_TOKEN_TE", ""),
+        },
+    )
+
+    day_num = list(_SHORT_OFFSETS.keys()).index(day_key) + 1
+    for lang in langs:
+        short_path = Path(day_entry["paths"].get(lang, ""))
+        if not short_path.exists():
+            log.warning(f"  [{lang}] Short file missing: {short_path} — skipping")
+            continue
+        refresh_token = uploader.refresh_tokens.get(lang, "")
+        if not refresh_token:
+            log.warning(f"  [{lang}] No refresh token — skipping")
+            continue
+
+        title = plan.get("titles", {}).get(lang) or plan.get("topic", "NacArtha")
+        short_title = f"#Shorts Day {day_num}: {title}"
+
+        log.info(f"  [{lang}] Uploading short for {day_key.upper()}…")
+        uploader.upload_all_languages(
+            video_path=short_path,
+            thumbnail_path=None,
+            translations={lang: {
+                "title":       short_title,
+                "description": f"{title}\n\n#NacArtha #AlgoTrading #Shorts",
+                "tags":        ["NacArtha", "AlgoTrading", "TradingBot", "Shorts"],
+            }},
+        )
+        if on_lang_done:
+            on_lang_done(lang)
+        log.info(f"  [{lang}] Short {day_key.upper()} uploaded ✓")
+
+    # Mark as uploaded in the plan
+    plan["shorts"][day_key]["uploaded"] = True
+    plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2))
+    log.info(f"Weekly plan updated — {day_key} marked uploaded")
 
 
 # ── Visual builder (type-specific) ────────────────────────────────────────────
@@ -454,6 +621,10 @@ def _generate_audio(scenes: list, out_dir: Path, voice_engine: VoiceEngine, lang
         sid        = scene["id"]
         audio_path = out_dir / f"scene_{sid:03d}.mp3"
         voice_engine.generate(scene["narration"], audio_path, lang)
+        if not audio_path.exists() or audio_path.stat().st_size < 1024:
+            raise RuntimeError(
+                f"Audio file missing or empty after generation: {audio_path.name} [{lang}]"
+            )
         s = dict(scene)
         s["narration_path"] = str(audio_path)
         result.append(s)
@@ -556,6 +727,22 @@ def _black_image(run_dir: Path) -> Path:
     return fb
 
 
+def _cleanup_old_runs(keep_days: int = 7):
+    """Delete output run directories older than keep_days to prevent disk bloat."""
+    import shutil, time
+    cutoff = time.time() - keep_days * 86400
+    deleted = []
+    for d in OUTPUT_DIR.iterdir():
+        if d.is_dir() and d.name.startswith("nac_") and d.stat().st_mtime < cutoff:
+            try:
+                shutil.rmtree(d)
+                deleted.append(d.name)
+            except Exception as e:
+                log.warning(f"  Cleanup failed for {d.name}: {e}")
+    if deleted:
+        log.info(f"  Cleaned up {len(deleted)} old run(s): {', '.join(deleted)}")
+
+
 def _notify_telegram(summary: dict):
     token   = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
@@ -579,4 +766,9 @@ def _notify_telegram(summary: dict):
 
 
 if __name__ == "__main__":
-    main()
+    import sys as _sys
+    if len(_sys.argv) > 1 and _sys.argv[1] == "short":
+        _sys.argv.pop(1)
+        main_short()
+    else:
+        main()

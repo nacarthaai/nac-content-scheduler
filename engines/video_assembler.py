@@ -257,18 +257,23 @@ class VideoAssembler:
 
     def cut_short(self, long_path: Path, short_path: Path) -> Path:
         """Cut first 60s of landscape long video → portrait 1080×1920 Short."""
+        return self.cut_scene_short(long_path, 0, SHORT_DURATION, short_path)
+
+    def cut_scene_short(self, long_path: Path, start_sec: float, duration_sec: float, short_path: Path) -> Path:
+        """Cut [start_sec, start_sec+duration_sec] from long video → portrait 1080×1920 Short."""
         short_path.parent.mkdir(parents=True, exist_ok=True)
         _run([
             "ffmpeg", "-y",
+            "-ss", str(start_sec),
             "-i", str(long_path),
-            "-t", str(SHORT_DURATION),
+            "-t", str(duration_sec),
             "-vf", "scale=1920:1080,crop=608:1080:656:0,scale=1080:1920",
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
             "-c:a", "aac", "-b:a", "128k",
             str(short_path),
         ])
-        size_mb = short_path.stat().st_size / (1024 * 1024)
-        log.info(f"Short cut → {short_path.name} ({size_mb:.1f} MB)")
+        size_mb = short_path.stat().st_size / (1024 * 1024) if short_path.exists() else 0
+        log.info(f"Short cut [{start_sec:.0f}s+{duration_sec:.0f}s] → {short_path.name} ({size_mb:.1f} MB)")
         return short_path
 
     def _build_scene(

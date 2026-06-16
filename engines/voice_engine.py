@@ -59,28 +59,40 @@ class VoiceEngine:
             return 0.0
 
     def _generate(self, text: str, out_path: Path, lang: str) -> bool:
-        try:
-            r = requests.post(
-                _ELEVENLABS_URL.format(voice_id=self._voice),
-                headers={"xi-api-key": self._key, "Content-Type": "application/json"},
-                json={
-                    "text": text,
-                    "model_id": _ELEVENLABS_MODEL,
-                    "voice_settings": {
-                        "stability": 0.5,
-                        "similarity_boost": 0.8,
-                        "style": 0.3,
-                        "use_speaker_boost": True,
+        import time
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            try:
+                r = requests.post(
+                    _ELEVENLABS_URL.format(voice_id=self._voice),
+                    headers={"xi-api-key": self._key, "Content-Type": "application/json"},
+                    json={
+                        "text": text,
+                        "model_id": _ELEVENLABS_MODEL,
+                        "voice_settings": {
+                            "stability": 0.5,
+                            "similarity_boost": 0.8,
+                            "style": 0.3,
+                            "use_speaker_boost": True,
+                        },
                     },
-                },
-                timeout=120,
-            )
-            if r.status_code != 200:
-                log.warning(f"  ElevenLabs [{lang}] HTTP {r.status_code}: {r.text[:300]}")
-                return False
-            out_path.write_bytes(r.content)
-            log.info(f"  ElevenLabs [{lang}] saved → {out_path.name} ({out_path.stat().st_size // 1024} KB)")
-            return True
-        except Exception as e:
-            log.warning(f"  ElevenLabs [{lang}] error: {e}")
-            return False
+                    timeout=120,
+                )
+                if r.status_code == 429:
+                    wait = 30 * attempt
+                    log.warning(f"  ElevenLabs [{lang}] rate-limited — waiting {wait}s (attempt {attempt}/{max_attempts})")
+                    time.sleep(wait)
+                    continue
+                if r.status_code != 200:
+                    log.warning(f"  ElevenLabs [{lang}] HTTP {r.status_code}: {r.text[:300]}")
+                    if attempt < max_attempts:
+                        time.sleep(10 * attempt)
+                    continue
+                out_path.write_bytes(r.content)
+                log.info(f"  ElevenLabs [{lang}] saved → {out_path.name} ({out_path.stat().st_size // 1024} KB)")
+                return True
+            except Exception as e:
+                log.warning(f"  ElevenLabs [{lang}] error (attempt {attempt}/{max_attempts}): {e}")
+                if attempt < max_attempts:
+                    time.sleep(10 * attempt)
+        return False
