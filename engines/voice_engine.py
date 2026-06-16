@@ -1,9 +1,13 @@
 """
-VoiceEngine — ElevenLabs multilingual TTS for EN, HI, TE.
+VoiceEngine — TTS for EN, HI, TE.
 
-All languages use NAC's cloned voice (ELEVENLABS_VOICE_ID_NAC) with eleven_multilingual_v2.
-~$0.57/month total (3k chars/day × 3 languages ≈ 9k chars/day, within creator plan).
-No HeyGen TTS or video_translate needed for audio.
+EN  → ElevenLabs NAC cloned voice (eleven_multilingual_v2) — character voice
+HI  → edge-tts hi-IN-MadhurNeural   — free, native Hindi Neural voice
+TE  → edge-tts te-IN-MohanNeural    — free, native Telugu Neural voice
+
+ElevenLabs multilingual_v2 is trained primarily on English; it mangles Dravidian
+and Hindi phonemes when used with an English-cloned voice. edge-tts Neural voices
+are purpose-built for each language and are completely intelligible.
 """
 import json
 import logging
@@ -18,6 +22,12 @@ log = logging.getLogger("voice_engine")
 _ELEVENLABS_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
 _ELEVENLABS_MODEL = "eleven_multilingual_v2"
 
+# edge-tts Neural voices — native speakers, clear pronunciation
+_EDGE_VOICES = {
+    "hi": "hi-IN-MadhurNeural",
+    "te": "te-IN-MohanNeural",
+}
+
 
 class VoiceEngine:
 
@@ -25,9 +35,10 @@ class VoiceEngine:
         self._key   = os.environ.get("ELEVENLABS_API_KEY", "")
         self._voice = os.environ.get("ELEVENLABS_VOICE_ID_NAC", "")
         if self._key and self._voice:
-            log.info(f"  ElevenLabs TTS ready — voice={self._voice[:8]}… (EN/HI/TE)")
+            log.info(f"  ElevenLabs TTS ready — voice={self._voice[:8]}… (EN only)")
         else:
-            log.warning("  ELEVENLABS_API_KEY or ELEVENLABS_VOICE_ID_NAC not set")
+            log.warning("  ELEVENLABS_API_KEY or ELEVENLABS_VOICE_ID_NAC not set — EN TTS will fail")
+        log.info("  edge-tts ready — HI=hi-IN-MadhurNeural  TE=te-IN-MohanNeural")
 
     def generate(self, text: str, out_path: Path, lang: str = "en") -> Path:
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -38,12 +49,17 @@ class VoiceEngine:
 
         log.info(f"Voice [{lang}] {len(text)} chars → {out_path.name}")
 
+        if lang in _EDGE_VOICES:
+            self._generate_edge(text, out_path, lang)
+            return out_path
+
+        # EN: ElevenLabs NAC cloned voice
         if not self._key:
             raise RuntimeError("ELEVENLABS_API_KEY not set")
         if not self._voice:
             raise RuntimeError("ELEVENLABS_VOICE_ID_NAC not set")
 
-        if self._generate(text, out_path, lang):
+        if self._generate_elevenlabs(text, out_path, lang):
             return out_path
 
         raise RuntimeError(f"ElevenLabs TTS failed for [{lang}]")
@@ -58,7 +74,17 @@ class VoiceEngine:
         except Exception:
             return 0.0
 
-    def _generate(self, text: str, out_path: Path, lang: str) -> bool:
+    def _generate_edge(self, text: str, out_path: Path, lang: str) -> None:
+        voice = _EDGE_VOICES[lang]
+        result = subprocess.run(
+            ["edge-tts", "--voice", voice, "--text", text, "--write-media", str(out_path)],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"edge-tts [{lang}] failed: {result.stderr[:300]}")
+        log.info(f"  edge-tts [{lang}] {voice} → {out_path.name} ({out_path.stat().st_size // 1024} KB)")
+
+    def _generate_elevenlabs(self, text: str, out_path: Path, lang: str) -> bool:
         import time
         max_attempts = 3
         for attempt in range(1, max_attempts + 1):
