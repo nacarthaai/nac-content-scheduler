@@ -331,7 +331,13 @@ def _start_dashboard_server():
     """Status dashboard only — no trigger endpoint."""
     token     = os.environ.get("TRIGGER_TOKEN", "")
     html_path = Path(__file__).parent / "static" / "dashboard.html"
-    _html     = html_path.read_text().replace("%%TOKEN%%", token) if html_path.exists() else "<h1>NacArtha Scheduler Running</h1>"
+    _TIKTOK_META = '<meta name="tiktok-developers-site-verification" content="l2oXJEDKAviuUSqlwkxh54nyZIJlyxm4" />'
+    if html_path.exists():
+        raw = html_path.read_text().replace("%%TOKEN%%", token)
+        # Inject TikTok verification meta tag into <head>
+        _html = raw.replace("<head>", f"<head>\n  {_TIKTOK_META}", 1) if "<head>" in raw else f"<html><head>{_TIKTOK_META}</head><body>{raw}</body></html>"
+    else:
+        _html = f"<html><head>{_TIKTOK_META}</head><body><h1>NacArtha Scheduler Running</h1></body></html>"
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
