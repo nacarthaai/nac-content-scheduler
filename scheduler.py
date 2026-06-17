@@ -346,6 +346,13 @@ def _start_dashboard_server():
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
+            elif path == "/tiktokl2oXJEDKAviuUSqlwkxh54nyZIJlyxm4.txt":
+                body = b"tiktokl2oXJEDKAviuUSqlwkxh54nyZIJlyxm4"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
             elif path in ("/health", "/healthz", "/ping"):
                 body = b"ok"
                 self.send_response(200)
