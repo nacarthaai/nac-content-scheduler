@@ -275,26 +275,15 @@ def main(langs: list = None, on_lang_done=None):
                     "tags":        script.get("tags", []),
                 }},
             )
-            log.info(f"  [{lang}] Uploading Monday short…")
-            short_urls = uploader.upload_all_languages(
-                video_path=short_path,
-                thumbnail_path=None,
-                translations={lang: {
-                    "title":       f"#Shorts {script['title']}",
-                    "description": description,
-                    "tags":        script.get("tags", []) + ["Shorts"],
-                }},
-            )
-
+            # Shorts upload disabled — not posting YouTube Shorts
             results[lang] = {
                 "status":    "success",
                 "title":     script["title"],
                 "long_url":  long_urls.get(lang),
-                "short_url": short_urls.get(lang),
             }
             if on_lang_done:
                 on_lang_done(lang)
-            log.info(f"  [{lang}] ✓ Long: {results[lang]['long_url']} | Short: {results[lang]['short_url']}")
+            log.info(f"  [{lang}] ✓ Long: {results[lang]['long_url']}")
 
         except Exception as e:
             log.error(f"[{lang.upper()}] FAILED: {e}", exc_info=True)
@@ -383,7 +372,11 @@ def _load_current_weekly_plan():
 
 
 def main_short(langs: list = None, on_lang_done=None) -> None:
-    """Upload today's pre-cut short from the current weekly plan (Tue-Sun)."""
+    """Shorts upload disabled — not posting YouTube Shorts."""
+    log.info("main_short called but shorts are disabled — skipping")
+    return
+
+    # ── disabled code below ────────────────────────────────────────────────────
     try:
         import static_ffmpeg
         static_ffmpeg.add_paths()

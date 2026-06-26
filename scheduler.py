@@ -311,7 +311,7 @@ def _fire_pipeline(langs: list, mode: str = "long"):
         import nac_orchestrator
         log.info(f"=== Manual fire: mode={mode} langs={langs} ===")
         if mode == "short":
-            nac_orchestrator.main_short(langs=langs, on_lang_done=_mark_lang_done)
+            log.warning("mode=short is disabled — not posting YouTube Shorts")
         elif mode == "trailer":
             _pipeline_lock.release()   # run_trailer_upload acquires its own lock
             run_trailer_upload()
@@ -475,13 +475,7 @@ scheduler.add_job(
     misfire_grace_time=None,
 )
 
-# Tue-Sun 4 PM ET — upload today's pre-cut short
-scheduler.add_job(
-    run_short_upload,
-    CronTrigger(day_of_week="tue,wed,thu,fri,sat,sun", hour=16, minute=0, timezone="America/New_York"),
-    max_instances=1,
-    misfire_grace_time=None,
-)
+# Shorts upload disabled — not posting YouTube Shorts
 
 _start_dashboard_server()
 
