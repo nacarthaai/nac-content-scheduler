@@ -956,7 +956,8 @@ def _remotion_render(comp_id: str, fname: str, frames: int, props: dict) -> Path
         "--props", json.dumps(props),
         "--frames", f"0-{frames - 1}",
         "--width", "1080", "--height", "1920",
-    ], timeout=180, cwd=str(CONTENT_ENGINE))
+        "--concurrency", "1",
+    ], timeout=420, cwd=str(CONTENT_ENGINE))
     log.info(f"  → {fname}")
     return out_path
 
