@@ -1577,94 +1577,117 @@ def _generate_narration(narration_text: str) -> Path:
 
 
 def engine_30_caption(video: Path, script: Dict, brief: Dict = None) -> Path:
-    log.info("[30] Caption Engine — drawtext captions (no libass required)")
+    log.info("[30] Caption Engine — Pillow PNG overlay (no libfreetype required)")
     out = OUT / "captioned.mp4"
     if out.exists():
         log.info("  [cache] captioned.mp4")
         return out
 
-    brief        = brief or {}
-    structural   = brief.get("structural_idea", "").upper()
-    color_spec   = brief.get("remotion_spec", {})
-    accent_hex   = color_spec.get("color_primary", "#f59e0b").lstrip("#")
+    import shutil
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        log.warning("  Pillow not installed — skipping captions")
+        shutil.copy(video, out); return out
 
-    # accent_hex → drawtext color format 0xRRGGBB
-    accent_draw = "0x" + accent_hex.upper()
+    brief      = brief or {}
+    structural = brief.get("structural_idea", "").upper()
+    accent_hex = brief.get("remotion_spec", {}).get("color_primary", "#f59e0b")
+    accent_rgb = tuple(int(accent_hex.lstrip("#")[i:i+2], 16) for i in (0, 2, 4))
 
     full_text = script.get("full_narration", "")
     words     = full_text.split()
     dur       = _duration(video)
     if not words or dur < 1:
-        import shutil; shutil.copy(video, out); return out
+        shutil.copy(video, out); return out
 
-    wps        = len(words) / dur
-    chunk_size = 6   # words per caption line
+    _FONT_PATHS = [
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/Library/Fonts/Arial Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+    ]
+    _FONT_SIZE = {"IMPACT": 56, "WORD_PUNCH": 56, "THRILLER": 50}.get(structural, 46)
 
-    # ── Caption style per structural idea ────────────────────────────────────
-    # Position: bottom-third (y = H*0.78), centered
-    # Font: bold, white with black outline (works without libass)
-    _CAPTION_STYLES = {
-        "CONFESSION":    {"size": 44, "color": "white",        "shadow": 3},
-        "THRILLER":      {"size": 48, "color": "white",        "shadow": 4},
-        "INVESTIGATION": {"size": 40, "color": "0xE0F7FA",     "shadow": 3},
-        "IMPACT":        {"size": 52, "color": "white",        "shadow": 5},
-        "BROADCAST":     {"size": 44, "color": "white",        "shadow": 3},
-        "WORD_PUNCH":    {"size": 56, "color": "white",        "shadow": 5},
-        "SPLIT":         {"size": 44, "color": "white",        "shadow": 3},
-        "EDITORIAL":     {"size": 38, "color": "0xFFFDE7",     "shadow": 2},
-    }
-    style = _CAPTION_STYLES.get(structural, {"size": 44, "color": "white", "shadow": 3})
+    font = None
+    for fp in _FONT_PATHS:
+        try:
+            font = ImageFont.truetype(fp, _FONT_SIZE)
+            break
+        except Exception:
+            pass
+    if font is None:
+        font = ImageFont.load_default()
 
-    # Build drawtext filter chain — one overlay per caption block
-    filters = []
-    current_word = 0
-    while current_word < len(words):
-        chunk   = words[current_word:current_word + chunk_size]
-        t_start = current_word / wps
-        t_end   = min((current_word + len(chunk)) / wps, dur)
-        text    = (
-            " ".join(chunk)
-            .replace("\\", "\\\\")   # backslash first
-            .replace("'",  "’") # curly apostrophe — avoids shell quoting nightmare
-            .replace(":",  "\\:")
-            .replace(",",  "\\,")
-            .replace("%",  "\\%")    # % is a format specifier in drawtext
-            .replace("$",  "\\$")    # $ is a format specifier in drawtext
-            .replace("[",  "\\[")
-            .replace("]",  "\\]")
+    W, H  = 1080, 1920
+    wps   = len(words) / dur
+    chunk = 5
+
+    # Build (image_path, t_start, t_end, is_accent) list
+    cap_dir = OUT / "cap_frames"
+    cap_dir.mkdir(exist_ok=True)
+    chunks = []
+    i = 0
+    while i < len(words):
+        grp     = words[i:i + chunk]
+        t_start = i / wps
+        t_end   = min((i + len(grp)) / wps, dur)
+        is_accent = (i // chunk) % 3 == 2
+        text    = " ".join(grp)
+
+        img  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        try:
+            bbox = draw.textbbox((0, 0), text, font=font)
+            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        except AttributeError:
+            tw, th = draw.textsize(text, font=font)
+
+        x = (W - tw) // 2
+        y = int(H * 0.78) - th // 2
+
+        color = accent_rgb if is_accent else (255, 255, 255)
+
+        # Black outline
+        for dx, dy in [(-3,0),(3,0),(0,-3),(0,3),(-2,-2),(2,-2),(-2,2),(2,2)]:
+            draw.text((x + dx, y + dy), text, font=font, fill=(0, 0, 0, 210))
+        draw.text((x, y), text, font=font, fill=(*color, 255))
+
+        img_path = cap_dir / f"cap_{i:05d}.png"
+        img.save(str(img_path))
+        chunks.append((img_path, t_start, t_end))
+        i += chunk
+
+    # Build ffmpeg overlay chain
+    inputs = ["-i", str(video)]
+    for img_path, _, _ in chunks:
+        inputs += ["-i", str(img_path)]
+
+    fc_parts = []
+    prev = "0:v"
+    for j, (_, t_start, t_end) in enumerate(chunks):
+        nxt = f"ov{j}"
+        fc_parts.append(
+            f"[{prev}][{j+1}:v]overlay=0:0:enable=’between(t,{t_start:.3f},{t_end:.3f})’[{nxt}]"
         )
+        prev = nxt
 
-        # every-other chunk: alternate white / accent color for visual rhythm
-        color = accent_draw if (current_word // chunk_size) % 3 == 2 else style["color"]
-
-        filters.append(
-            f"drawtext=text='{text}'"
-            f":fontsize={style['size']}"
-            f":fontcolor={color}"
-            f":borderw={style['shadow']}"
-            f":bordercolor=black@0.85"
-            f":x=(w-text_w)/2"
-            f":y=h*0.78"
-            f":enable='between(t,{t_start:.3f},{t_end:.3f})'"
-        )
-        current_word += chunk_size
-
-    if not filters:
-        import shutil; shutil.copy(video, out); return out
-
-    vf_chain = ",".join(filters)
-    r = _run([
-        "ffmpeg", "-y", "-i", str(video),
-        "-vf", vf_chain,
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "copy",
-        str(out),
-    ], check=False)
-
-    if not out.exists():
-        import shutil; shutil.copy(video, out)
-        log.warning(f"  Caption drawtext failed — ffmpeg stderr: {r.stderr[-300:]}")
+    fc = ";".join(fc_parts)
+    r = _run(
+        ["ffmpeg", "-y"] + inputs + [
+            "-filter_complex", fc,
+            "-map", f"[{prev}]", "-map", "0:a",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "copy",
+            str(out),
+        ],
+        check=False, timeout=300,
+    )
+    if not out.exists() or out.stat().st_size < 1000:
+        log.warning(f"  Caption overlay failed: {r.stderr[-200:]}")
+        shutil.copy(video, out)
     else:
-        log.info(f"  → captioned.mp4 ({len(filters)} blocks, style: {structural or 'default'})")
+        log.info(f"  → captioned.mp4 ({len(chunks)} caption blocks, Pillow PNG overlay)")
     return out
 
 
