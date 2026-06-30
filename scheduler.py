@@ -56,49 +56,45 @@ def _deploy_guard() -> bool:
 
 
 def run_long_pipeline():
-    """Monday 4 PM ET — generate long video + cut all 7 weekly shorts."""
+    """DISABLED — replaced by run_full_shorts_studio.py (38-engine pipeline)."""
+    log.warning("=== run_long_pipeline() is DISABLED — all video gen uses run_full_shorts_studio.py ===")
+    _telegram("⚠️ run_long_pipeline() was called but is DISABLED. Use run_full_shorts_studio.py.")
+
+
+def run_full_shorts_studio_pipeline():
+    """Daily 4 PM ET — run the 38-engine full shorts pipeline."""
     if _deploy_guard():
         return
-    log.info("=== Monday: Long video pipeline (4 PM ET) ===")
+    log.info("=== Daily: 38-Engine Full Shorts Studio (4 PM ET) ===")
     if not _pipeline_lock.acquire(blocking=False):
         log.warning("Pipeline already running — skipping")
         return
     try:
         import sys as _sys
-        _sys.modules.pop("nac_orchestrator", None)
-        import nac_orchestrator
-        nac_orchestrator.main(langs=_ALL_LANGS, on_lang_done=_mark_lang_done)
-        log.info("=== Long pipeline complete ===")
-        _telegram("✅ NacArtha long video + weekly shorts ready")
+        import subprocess
+        studio_path = Path(__file__).parent / "run_full_shorts_studio.py"
+        result = subprocess.run(
+            ["python", str(studio_path)],
+            capture_output=False,
+            timeout=3600,
+        )
+        if result.returncode == 0:
+            log.info("=== Full shorts studio complete ===")
+            _telegram("✅ NacArtha daily short ready (38-engine pipeline)")
+        else:
+            log.error(f"Studio pipeline exited with code {result.returncode}")
+            _telegram(f"❌ NacArtha studio pipeline FAILED (exit {result.returncode})")
     except Exception as e:
-        log.error(f"Long pipeline failed: {e}", exc_info=True)
-        _telegram(f"❌ NacArtha long pipeline FAILED:\n`{e}`")
+        log.error(f"Studio pipeline error: {e}", exc_info=True)
+        _telegram(f"❌ NacArtha studio pipeline FAILED:\n`{e}`")
     finally:
         _pipeline_lock.release()
 
 
 def run_short_upload():
-    """Tue-Sun 4 PM ET — upload today's pre-cut short from weekly_plan.json."""
-    if _deploy_guard():
-        return
-    if os.environ.get("SKIP_SHORTS_TODAY", "").lower() in ("1", "true", "yes"):
-        log.warning("SKIP_SHORTS_TODAY is set — skipping short upload for today.")
-        return
-    log.info("=== Daily short upload (4 PM ET) ===")
-    if not _pipeline_lock.acquire(blocking=False):
-        log.warning("Pipeline already running — skipping")
-        return
-    try:
-        import sys as _sys
-        _sys.modules.pop("nac_orchestrator", None)
-        import nac_orchestrator
-        nac_orchestrator.main_short(langs=_ALL_LANGS, on_lang_done=_mark_lang_done)
-        log.info("=== Short upload complete ===")
-    except Exception as e:
-        log.error(f"Short upload failed: {e}", exc_info=True)
-        _telegram(f"❌ NacArtha short upload FAILED:\n`{e}`")
-    finally:
-        _pipeline_lock.release()
+    """DISABLED — short upload was part of old nac_orchestrator pipeline."""
+    log.warning("=== run_short_upload() is DISABLED — use run_full_shorts_studio.py ===")
+    _telegram("⚠️ run_short_upload() was called but is DISABLED.")
 
 
 TRAILER_PATH = Path("/tmp/nac_trailer.mp4")
@@ -467,15 +463,15 @@ def _start_dashboard_server():
 
 scheduler = BlockingScheduler()
 
-# Monday 4 PM ET — full long video + cut 7 weekly shorts
+# Daily 4 PM ET — 38-engine full shorts studio pipeline
 scheduler.add_job(
-    run_long_pipeline,
-    CronTrigger(day_of_week="mon", hour=16, minute=0, timezone="America/New_York"),
+    run_full_shorts_studio_pipeline,
+    CronTrigger(day_of_week="mon-sun", hour=16, minute=0, timezone="America/New_York"),
     max_instances=1,
     misfire_grace_time=None,
 )
 
-# Shorts upload disabled — not posting YouTube Shorts
+# Old pipelines are DISABLED — run_long_pipeline and run_short_upload are no-ops
 
 _start_dashboard_server()
 
