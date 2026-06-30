@@ -1092,9 +1092,36 @@ def engine_24_motion_graphics(script: Dict, idea: ShortIdea, brief: Dict, chart_
     hook_program = brief.get("hook_program", {})
     stat_program = brief.get("stat_program", {})
 
-    # 1. Hook card (3s) — always use pre-built composition (DynamicScene too slow for hook)
-    # DynamicScene has 10+ layers with blur/grain/ticker = 5s/frame × 90 frames = too long
-    log.info(f"  → Using preset {hook_comp} for hook (AI-directed color+style)")
+    # Structural idea → unique composition + visual identity (overrides layout)
+    structural = brief.get("structural_idea", "").upper()
+    _STRUCTURAL_HOOK = {
+        "CONFESSION":    ("FilmCard",   {"bgGradientStart": "#180000", "bgGradientEnd": "#000000", "grain": 0.45, "vignette": 0.8}),
+        "THRILLER":      ("GlitchHook", {"bgGradientStart": "#04040c", "bgGradientEnd": "#000000", "grain": 0.5,  "vignette": 0.7}),
+        "INVESTIGATION": ("GlitchHook", {"bgGradientStart": "#020610", "bgGradientEnd": "#000000", "grain": 0.35, "vignette": 0.6}),
+        "IMPACT":        ("WordPunch",  {"bgGradientStart": "#0e0400", "bgGradientEnd": "#000000", "grain": 0.2,  "vignette": 0.5}),
+        "BROADCAST":     ("NewsFlash",  {"bgGradientStart": "#070002", "bgGradientEnd": "#000000", "grain": 0.15, "vignette": 0.4}),
+        "WORD_PUNCH":    ("TypoSlam",   {"bgGradientStart": "#0d0000", "bgGradientEnd": "#000000", "grain": 0.4,  "vignette": 0.7}),
+        "SPLIT":         ("SplitReveal",{"bgGradientStart": "#0a0000", "bgGradientEnd": "#000000", "grain": 0.3,  "vignette": 0.6}),
+        "EDITORIAL":     ("FilmCard",   {"bgGradientStart": "#080400", "bgGradientEnd": "#000000", "grain": 0.25, "vignette": 0.5}),
+    }
+    _STRUCTURAL_STAT = {
+        "CONFESSION":    "ImpactStat",
+        "THRILLER":      "WinLoseSlam",
+        "INVESTIGATION": "DataReveal",
+        "IMPACT":        "WinLoseSlam",
+        "BROADCAST":     "ImpactStat",
+        "WORD_PUNCH":    "WinLoseSlam",
+        "SPLIT":         "DataReveal",
+        "EDITORIAL":     "DataReveal",
+    }
+    if structural in _STRUCTURAL_HOOK:
+        hook_comp, struct_vis = _STRUCTURAL_HOOK[structural]
+        stat_comp = _STRUCTURAL_STAT[structural]
+        vis.update(struct_vis)
+        log.info(f"  → Structural override: {structural} → hook={hook_comp} stat={stat_comp}")
+
+    # 1. Hook card (3s) — unique composition per structural idea
+    log.info(f"  → Rendering {hook_comp} for hook")
     outputs["HookCard"] = _remotion_render(hook_comp, "hook.mp4", 90, {
         "text":      script.get("hook_text", "THE AI KNEW"),
         "subtext":   script.get("hook_subtext", ""),
