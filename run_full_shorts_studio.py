@@ -2382,11 +2382,12 @@ def main():
     _stale = [
         "pai_clip_00.mp4", "pai_clip_01.mp4", "pai_clip_02.mp4",
         "nac_perf_hook.mp4", "nac_perf_analysis.mp4", "nac_perf_conclusion.mp4",
+        # Remotion renders — new AI brief must drive fresh renders each run
+        "hook.mp4", "stat.mp4", "cta_mg.mp4", "outro.mp4", "trading_chart.mp4",
         "timeline_raw.mp4", "camera.mp4",
         "chart_vfx.mp4",
         "captioned.mp4", "transitioned.mp4", "graded.mp4",
         "body.mp4", "final.mp4",
-        # SFX — chart_move is direction-aware, must regenerate each run
         "chart_move.mp3",
     ]
     for _f in _stale:
@@ -2518,6 +2519,8 @@ def main_long() -> Optional[str]:
     _stale_long = [
         "pai_clip_00.mp4", "pai_clip_01.mp4", "pai_clip_02.mp4",
         "nac_perf_hook.mp4", "nac_perf_analysis.mp4", "nac_perf_conclusion.mp4",
+        # Remotion renders — new AI brief must drive fresh renders each run
+        "hook.mp4", "stat.mp4", "cta_mg.mp4", "outro.mp4", "trading_chart.mp4",
         "timeline_raw.mp4", "camera.mp4",
         "chart_vfx.mp4",
         "captioned.mp4", "transitioned.mp4", "graded.mp4",
@@ -2622,8 +2625,12 @@ def main_test() -> Path:
     # Clear stale outputs
     import shutil as _sl
     _stale_t = [
+        # PAI clips (restored from cache each run)
         "pai_clip_00.mp4", "pai_clip_01.mp4", "pai_clip_02.mp4",
         "nac_perf_hook.mp4", "nac_perf_analysis.mp4", "nac_perf_conclusion.mp4",
+        # Remotion renders — must regenerate so new AI brief takes effect
+        "hook.mp4", "stat.mp4", "cta_mg.mp4", "outro.mp4", "trading_chart.mp4",
+        # Pipeline
         "timeline_raw.mp4", "camera.mp4", "chart_vfx.mp4",
         "captioned.mp4", "transitioned.mp4", "graded.mp4",
         "body.mp4", "final.mp4", "narration.mp3", "chart_move.mp3",
