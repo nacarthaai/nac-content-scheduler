@@ -1659,35 +1659,57 @@ def engine_30_caption(video: Path, script: Dict, brief: Dict = None) -> Path:
         chunks.append((img_path, t_start, t_end))
         i += chunk
 
-    # Build ffmpeg overlay chain
-    inputs = ["-i", str(video)]
-    for img_path, _, _ in chunks:
-        inputs += ["-i", str(img_path)]
+    # Build a single caption-track video via concat, then overlay once
+    # Step 1: build gap→text→gap segments covering the full duration
+    fps   = 30
+    blank = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    blank_path = cap_dir / "blank.png"
+    blank.save(str(blank_path))
 
-    fc_parts = []
-    prev = "0:v"
-    for j, (_, t_start, t_end) in enumerate(chunks):
-        nxt = f"ov{j}"
-        fc_parts.append(
-            f"[{prev}][{j+1}:v]overlay=0:0:enable=’between(t,{t_start:.3f},{t_end:.3f})’[{nxt}]"
-        )
-        prev = nxt
+    # Segments: (png_path, duration_seconds)
+    segments = []
+    cursor   = 0.0
+    for img_path, t_start, t_end in chunks:
+        if t_start > cursor + 0.01:
+            segments.append((blank_path, t_start - cursor))
+        segments.append((img_path, t_end - t_start))
+        cursor = t_end
+    if cursor < dur - 0.05:
+        segments.append((blank_path, dur - cursor))
 
-    fc = ";".join(fc_parts)
-    r = _run(
-        ["ffmpeg", "-y"] + inputs + [
-            "-filter_complex", fc,
-            "-map", f"[{prev}]", "-map", "0:a",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "copy",
-            str(out),
+    # Step 2: build caption track video via ffmpeg concat
+    cap_track = OUT / "cap_track.mp4"
+    seg_inputs, concat_parts = [], []
+    for si, (p, d) in enumerate(segments):
+        seg_inputs += ["-loop", "1", "-t", f"{d:.3f}", "-i", str(p)]
+        concat_parts.append(f"[{si}:v]")
+    n = len(segments)
+    fc_concat = "".join(concat_parts) + f"concat=n={n}:v=1:a=0[capv]"
+    _run(
+        ["ffmpeg", "-y"] + seg_inputs + [
+            "-filter_complex", fc_concat,
+            "-map", "[capv]",
+            "-c:v", "libx264", "-pix_fmt", "yuva420p",
+            "-r", str(fps), str(cap_track),
         ],
-        check=False, timeout=300,
+        check=False, timeout=120,
     )
+
+    # Step 3: single overlay of caption track on video
+    if cap_track.exists() and cap_track.stat().st_size > 1000:
+        r = _run(
+            ["ffmpeg", "-y", "-i", str(video), "-i", str(cap_track),
+             "-filter_complex", "[0:v][1:v]overlay=0:0[v]",
+             "-map", "[v]", "-map", "0:a",
+             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "copy",
+             str(out)],
+            check=False, timeout=300,
+        )
     if not out.exists() or out.stat().st_size < 1000:
-        log.warning(f"  Caption overlay failed: {r.stderr[-200:]}")
+        log.warning("  Caption overlay failed — using uncaptioned video")
         shutil.copy(video, out)
     else:
-        log.info(f"  → captioned.mp4 ({len(chunks)} caption blocks, Pillow PNG overlay)")
+        log.info(f"  → captioned.mp4 ({len(chunks)} blocks, Pillow+concat overlay)")
     return out
 
 
