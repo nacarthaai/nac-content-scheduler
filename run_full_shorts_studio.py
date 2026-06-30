@@ -1099,8 +1099,16 @@ def engine_24_shot_renderer(
         grain  = shot.get("grain",    global_grain)
         text   = shot.get("text",     "")
         sub    = shot.get("sub_text", "")
-        frames = max(30, int(dur * 30))
-        fname  = f"shots/shot_{sid:03d}.mp4"
+        # Clamp frames to each composition's hardcoded durationInFrames
+        _COMP_MAX_FRAMES = {
+            "FilmCard": 90, "TypoSlam": 90, "GlitchHook": 90,
+            "SplitReveal": 90, "WordPunch": 90, "NewsFlash": 90,
+            "ImpactStat": 180, "WinLoseSlam": 180, "DataReveal": 180,
+            "TradingChart": 1050, "CTACard": 150,
+        }
+        comp_max = _COMP_MAX_FRAMES.get(comp, 90)
+        frames   = min(max(30, int(dur * 30)), comp_max)
+        fname    = f"shots/shot_{sid:03d}.mp4"
 
         # Enforce trade-direction bg — override generic dark-blue defaults
         # (#0a0a1a, #04040c, etc.) that look purple on screen
