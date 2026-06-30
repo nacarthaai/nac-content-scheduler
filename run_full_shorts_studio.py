@@ -1161,7 +1161,7 @@ def engine_25_vfx(trading_chart_path: Path) -> Path:
     return out
 
 
-def engine_26_sfx(brief: Dict = None) -> Dict[str, Path]:
+def engine_26_sfx(brief: Dict = None, idea=None) -> Dict[str, Path]:
     log.info("[26] SFX Engine — direction-aware sound design via ffmpeg lavfi")
     brief = brief or {}
     sfx_profile = (
@@ -1214,16 +1214,87 @@ def engine_26_sfx(brief: Dict = None) -> Dict[str, Path]:
     profile     = _PROFILES.get(profile_key, _PROFILES["tension"])
     log.info(f"  SFX profile: {profile_key} (structural: {structural or 'default'})")
 
+    # ── Action sounds — same for all profiles, context-placed in engine_33 ──
+    # direction — SHORT=descending chart sweep, LONG=ascending
+    _dir = (idea.direction.upper() if idea else "SHORT")
+    _chart_sweep_freq = "(800-600*t/0.6)" if _dir == "SHORT" else "(200+600*t/0.6)"
+
+    _ACTION_SOUNDS = {
+        # keyboard_typing — 2s of rapid mechanical key clicks (~8 clicks/s)
+        "keyboard_typing": (
+            f"aevalsrc='0.35*sin(2*PI*2800*mod(t,0.11))*exp(-350*mod(t,0.11))+0.15*sin(2*PI*4200*mod(t,0.11))*exp(-500*mod(t,0.11))':s=44100:d=2.0",
+            "keyboard_typing.mp3"
+        ),
+        # keyboard_typing_short — 0.5s burst (single sentence of typing)
+        "keyboard_typing_short": (
+            f"aevalsrc='0.3*sin(2*PI*3000*mod(t,0.12))*exp(-400*mod(t,0.12))':s=44100:d=0.5",
+            "keyboard_short.mp3"
+        ),
+        # mouse_click — crisp single click
+        "mouse_click": (
+            f"aevalsrc='0.55*sin(2*PI*1400*t)*exp(-90*t)+0.2*sin(2*PI*2800*t)*exp(-180*t)':s=44100:d=0.08",
+            "mouse_click.mp3"
+        ),
+        # double_click — two rapid clicks (opening chart, selecting trade)
+        "double_click": (
+            f"aevalsrc='0.5*(sin(2*PI*1400*t)*exp(-90*t)+sin(2*PI*1400*max(t-0.12,0))*exp(-90*max(t-0.12,0)))':s=44100:d=0.25",
+            "double_click.mp3"
+        ),
+        # trade_execute — satisfying "order placed" thud + ring
+        "trade_execute": (
+            f"aevalsrc='0.75*(sin(2*PI*180*t)*exp(-12*t)+0.45*sin(2*PI*540*t)*exp(-20*t)+0.2*sin(2*PI*1080*t)*exp(-35*t))':s=44100:d=0.55",
+            "trade_execute.mp3"
+        ),
+        # chart_move — price action sweep (direction-aware: SHORT=down, LONG=up)
+        "chart_move": (
+            f"aevalsrc='0.38*sin(2*PI*{_chart_sweep_freq}*t)*exp(-1.8*t)+0.18*sin(2*PI*{_chart_sweep_freq}*2*t)*exp(-2.5*t)':s=44100:d=0.65",
+            "chart_move.mp3"
+        ),
+        # data_reveal — digital cascade, data populating on screen
+        "data_reveal": (
+            f"aevalsrc='0.28*sin(2*PI*(280+1100*t/0.75)*t)*exp(-0.9*t)+0.14*sin(2*PI*(140+550*t/0.75)*t)*exp(-1.3*t)':s=44100:d=0.75",
+            "data_reveal.mp3"
+        ),
+        # screen_tap — sharp tap on glass/touchscreen
+        "screen_tap": (
+            f"aevalsrc='0.45*(random(0)-0.5)*exp(-180*t)+0.25*sin(2*PI*1600*t)*exp(-120*t)':s=44100:d=0.06",
+            "screen_tap.mp3"
+        ),
+        # chart_alert — AI signal detected electronic beep pair
+        "chart_alert": (
+            f"aevalsrc='0.48*(sin(2*PI*880*t)+0.6*sin(2*PI*1320*t))*exp(-9*t)':s=44100:d=0.28",
+            "chart_alert.mp3"
+        ),
+        # scroll — scrolling through data/chart
+        "scroll": (
+            f"anoisesrc=d=0.18:c=pink:a=0.09",
+            "scroll.mp3"
+        ),
+    }
+
     sfx = {}
+    # Generate profile sounds
     for name, (lavfi_src, fname) in profile.items():
         out = OUT / fname
         if not out.exists():
-            subprocess.run([
-                "ffmpeg", "-y", "-f", "lavfi", "-i", lavfi_src,
-                "-ar", "44100", str(out),
-            ], capture_output=True, timeout=10)
+            subprocess.run(
+                ["ffmpeg", "-y", "-f", "lavfi", "-i", lavfi_src, "-ar", "44100", str(out)],
+                capture_output=True, timeout=10,
+            )
         sfx[name] = out
         log.info(f"  → {fname} [{profile_key}]")
+
+    # Generate action sounds (same across all profiles)
+    for name, (lavfi_src, fname) in _ACTION_SOUNDS.items():
+        out = OUT / fname
+        if not out.exists():
+            subprocess.run(
+                ["ffmpeg", "-y", "-f", "lavfi", "-i", lavfi_src, "-ar", "44100", str(out)],
+                capture_output=True, timeout=10,
+            )
+        sfx[name] = out
+        log.info(f"  → {fname} [action]")
+
     return sfx
 
 
@@ -1653,31 +1724,75 @@ def engine_33_render(
         log.info("  [cache] final.mp4")
         return out
 
-    dur = script.get("duration_seconds", 55.0)
-    # Narration duration
+    dur     = script.get("duration_seconds", 55.0)
     nar_dur = _duration(narration)
 
-    # Build SFX with delays (ping at 0s, reveal at 8s, whoosh at 20s, notification at 45s)
-    sfx_inputs = []
-    sfx_filters = []
-    sfx_map_idx = 2  # 0=video, 1=narration, 2+=sfx, music
-
-    sfx_timings = [
-        ("ping",         0.0),
-        ("reveal",       8.0),
-        ("whoosh",       20.0),
-        ("notification", 45.0),
+    # ── Dynamic SFX timeline — every sound placed at the right story moment ──
+    # Each tuple: (sfx_name, fraction_of_dur 0.0-1.0, volume 0.0-1.0)
+    # Fraction × dur = absolute placement time in seconds.
+    _SFX_PLAN = [
+        # Opening — NAC starts working / hook lands
+        ("keyboard_typing",       0.00,  0.38),
+        ("chart_alert",           0.04,  0.55),   # AI signal detected
+        ("ping",                  0.06,  0.48),   # hook card slam
+        # B-roll / setup
+        ("reveal",                0.14,  0.42),   # visual reveal / B-roll in
+        ("scroll",                0.19,  0.32),   # scrolling chart data
+        ("mouse_click",           0.22,  0.50),   # selecting trade
+        # Trade execution
+        ("double_click",          0.27,  0.52),   # confirming order
+        ("trade_execute",         0.30,  0.62),   # ORDER PLACED — loudest moment
+        # Chart appears on screen
+        ("whoosh",                0.36,  0.38),   # chart sweeps in
+        ("keyboard_typing_short", 0.42,  0.30),   # typing mid-analysis
+        ("screen_tap",            0.46,  0.40),   # touching chart point
+        # Market moves
+        ("chart_move",            0.55,  0.50),   # price moves (direction-aware)
+        ("scroll",                0.60,  0.28),   # scrolling through result
+        ("keyboard_typing_short", 0.63,  0.26),   # more typing
+        # Stats reveal
+        ("data_reveal",           0.68,  0.45),   # data populates on screen
+        ("screen_tap",            0.72,  0.38),   # tapping data point
+        ("notification",          0.78,  0.52),   # result notification
+        # Trade close
+        ("mouse_click",           0.84,  0.42),   # reviewing
+        ("double_click",          0.87,  0.48),   # confirming exit
+        ("trade_execute",         0.90,  0.60),   # TRADE CLOSED
+        ("chart_alert",           0.94,  0.38),   # final AI summary beep
     ]
-    sfx_streams = []
-    for sfx_name, t_start in sfx_timings:
-        if sfx_name in sfx and sfx[sfx_name].exists():
-            sfx_inputs += ["-i", str(sfx[sfx_name])]
-            delay_ms = int(t_start * 1000)
-            label = f"sfx{sfx_map_idx}"
-            sfx_filters.append(f"[{sfx_map_idx}:a]adelay={delay_ms}|{delay_ms},volume=0.5[{label}]")
-            sfx_streams.append(f"[{label}]")
-            sfx_map_idx += 1
 
+    # Extra events for long format (>200s) — fill the middle sections
+    _SFX_EXTRA_LONG = [
+        ("keyboard_typing",       0.33,  0.30),
+        ("chart_move",            0.43,  0.44),
+        ("screen_tap",            0.50,  0.32),
+        ("data_reveal",           0.57,  0.38),
+        ("scroll",                0.65,  0.26),
+        ("keyboard_typing_short", 0.70,  0.24),
+        ("chart_alert",           0.75,  0.42),
+    ]
+
+    sfx_plan = list(_SFX_PLAN) + (_SFX_EXTRA_LONG if dur > 200 else [])
+
+    sfx_inputs  = []
+    sfx_filters = []
+    sfx_streams = []
+    sfx_map_idx = 2  # 0=video, 1=narration, 2+=sfx/music
+
+    for sfx_name, fraction, vol in sorted(sfx_plan, key=lambda x: x[1]):
+        t_start = fraction * dur
+        if t_start >= dur - 0.3 or sfx_name not in sfx or not sfx[sfx_name].exists():
+            continue
+        delay_ms = int(t_start * 1000)
+        label    = f"sfx{sfx_map_idx}"
+        sfx_inputs  += ["-i", str(sfx[sfx_name])]
+        sfx_filters.append(
+            f"[{sfx_map_idx}:a]adelay={delay_ms}|{delay_ms},volume={vol:.2f}[{label}]"
+        )
+        sfx_streams.append(f"[{label}]")
+        sfx_map_idx += 1
+
+    log.info(f"  SFX: {len(sfx_streams)} sound events across {dur:.0f}s timeline")
     inputs = ["-i", str(video), "-i", str(narration)] + sfx_inputs
 
     # Music input
@@ -2259,12 +2374,14 @@ def main():
     # ── Clear per-run outputs so nothing is reused from last run ──────────────
     import shutil as _shutil
     _stale = [
-        "pai_clip_00.mp4", "pai_clip_01.mp4", "pai_clip_02.mp4",      # PAI B-roll
-        "nac_perf_hook.mp4", "nac_perf_analysis.mp4", "nac_perf_conclusion.mp4",  # NAC perf
-        "timeline_raw.mp4", "camera.mp4",          # assembly
-        "chart_vfx.mp4",                           # vfx
-        "captioned.mp4", "transitioned.mp4", "graded.mp4",             # post chain
-        "body.mp4", "final.mp4",                   # render
+        "pai_clip_00.mp4", "pai_clip_01.mp4", "pai_clip_02.mp4",
+        "nac_perf_hook.mp4", "nac_perf_analysis.mp4", "nac_perf_conclusion.mp4",
+        "timeline_raw.mp4", "camera.mp4",
+        "chart_vfx.mp4",
+        "captioned.mp4", "transitioned.mp4", "graded.mp4",
+        "body.mp4", "final.mp4",
+        # SFX — chart_move is direction-aware, must regenerate each run
+        "chart_move.mp3",
     ]
     for _f in _stale:
         _p = OUT / _f
@@ -2308,7 +2425,7 @@ def main():
     chart_data     = engine_23_dashboard(idea)
     motion_clips   = engine_24_motion_graphics(script, idea, brief, chart_data)
     chart_vfx      = engine_25_vfx(motion_clips["TradingChart"])
-    sfx            = engine_26_sfx(brief)
+    sfx            = engine_26_sfx(brief, idea)
     music_path     = engine_27_music(brief)
 
     # ── POST PRODUCTION ───────────────────────────────────────────────────────
@@ -2455,7 +2572,7 @@ def main_long() -> Optional[str]:
     chart_data   = engine_23_dashboard(idea)
     motion_clips = engine_24_motion_graphics(script, idea, brief, chart_data)
     chart_vfx    = engine_25_vfx(motion_clips["TradingChart"])
-    sfx          = engine_26_sfx(brief)
+    sfx          = engine_26_sfx(brief, idea)
     music_path   = engine_27_music(brief)
 
     # ── POST PRODUCTION ───────────────────────────────────────────────────────
