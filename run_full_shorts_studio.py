@@ -1591,7 +1591,8 @@ def engine_30_caption(video: Path, script: Dict, brief: Dict = None) -> Path:
         is_accent = (i // chunk_size) % 3 == 2
         text    = " ".join(grp)
 
-        img  = Image.new("RGB", (W, H), (0, 0, 0))
+        # RGBA: transparent background so overlay filter preserves video colors
+        img  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         try:
             bbox = draw.textbbox((0, 0), text, font=font)
@@ -1602,13 +1603,12 @@ def engine_30_caption(video: Path, script: Dict, brief: Dict = None) -> Path:
         x = (W - tw) // 2
         y = int(H * 0.78) - th // 2
 
-        # Glow: slightly bright halo so text pops even on bright backgrounds
-        glow_color = tuple(min(255, c + 80) for c in accent_rgb) if is_accent else (180, 180, 180)
-        for dx, dy in [(-4,0),(4,0),(0,-4),(0,4),(-3,-3),(3,-3),(-3,3),(3,3)]:
-            draw.text((x + dx, y + dy), text, font=font, fill=glow_color)
+        # Black shadow for readability on any background
+        for dx, dy in [(-3,0),(3,0),(0,-3),(0,3),(-2,-2),(2,-2),(-2,2),(2,2)]:
+            draw.text((x + dx, y + dy), text, font=font, fill=(0, 0, 0, 220))
 
-        # Main text: white or accent
-        color = accent_rgb if is_accent else (255, 255, 255)
+        # Main text: white or accent (fully opaque)
+        color = (*accent_rgb, 255) if is_accent else (255, 255, 255, 255)
         draw.text((x, y), text, font=font, fill=color)
 
         img_path = cap_dir / f"cap_{i:05d}.png"
@@ -1616,56 +1616,77 @@ def engine_30_caption(video: Path, script: Dict, brief: Dict = None) -> Path:
         chunks.append((img_path, t_start, t_end))
         i += chunk_size
 
-    # Build blank (pure black) for gaps
-    blank_path = cap_dir / "blank.png"
-    Image.new("RGB", (W, H), (0, 0, 0)).save(str(blank_path))
+    # Segment-based RGBA overlay: cut video per caption window, overlay transparent
+    # PNG on each segment, concat. Avoids ALL YUV chroma math (screen/blend filters
+    # corrupt colors when operating in YUV space where "black" = Y=0,U=128,V=128).
+    seg_clips = []
+    cursor    = 0.0
+    seg_idx   = 0
 
-    # Segments: (png_path, duration_seconds)
-    segments = []
-    cursor   = 0.0
+    def _cut_segment(t_s, t_e, overlay_png=None):
+        nonlocal seg_idx
+        d = t_e - t_s
+        if d < 0.05:
+            return
+        seg_out = cap_dir / f"seg_{seg_idx:03d}.mp4"
+        seg_idx += 1
+        if seg_out.exists():
+            seg_clips.append(seg_out); return
+        if overlay_png and overlay_png.exists():
+            r = _run([
+                "ffmpeg", "-y",
+                "-ss", f"{t_s:.3f}", "-t", f"{d:.3f}", "-i", str(video),
+                "-i", str(overlay_png),
+                "-filter_complex", "[0:v][1:v]overlay=0:0:format=auto[v]",
+                "-map", "[v]", "-an",
+                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30",
+                str(seg_out),
+            ], check=False, timeout=60)
+        else:
+            r = _run([
+                "ffmpeg", "-y",
+                "-ss", f"{t_s:.3f}", "-t", f"{d:.3f}", "-i", str(video),
+                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", "-an",
+                str(seg_out),
+            ], check=False, timeout=60)
+        if seg_out.exists() and seg_out.stat().st_size > 500:
+            seg_clips.append(seg_out)
+
     for img_path, t_start, t_end in chunks:
-        if t_start > cursor + 0.01:
-            segments.append((blank_path, t_start - cursor))
-        segments.append((img_path, t_end - t_start))
+        _cut_segment(cursor, t_start, None)       # gap before caption
+        _cut_segment(t_start, t_end, img_path)    # caption window
         cursor = t_end
-    if cursor < dur - 0.05:
-        segments.append((blank_path, dur - cursor))
+    _cut_segment(cursor, dur, None)               # tail
 
-    # Build caption track: yuv420p (no alpha needed — black will screen-blend away)
-    cap_track = OUT / "cap_track.mp4"
-    seg_inputs, concat_parts = [], []
-    for si, (p, d) in enumerate(segments):
-        seg_inputs += ["-loop", "1", "-t", f"{d:.3f}", "-i", str(p)]
-        concat_parts.append(f"[{si}:v]")
-    n = len(segments)
-    fc_concat = "".join(concat_parts) + f"concat=n={n}:v=1:a=0[capv]"
-    r_track = _run(
-        ["ffmpeg", "-y"] + seg_inputs + [
-            "-filter_complex", fc_concat,
-            "-map", "[capv]",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p",
-            "-r", "30", str(cap_track),
-        ],
-        check=False, timeout=120,
-    )
-    if not cap_track.exists() or cap_track.stat().st_size < 1000:
-        log.warning(f"  cap_track build failed: {r_track.stderr[-200:]}")
+    if not seg_clips:
+        log.warning("  No segments produced — using uncaptioned video")
         shutil.copy(video, out); return out
 
-    # Screen blend: black → transparent, white/color → additive bright text
-    r = _run(
-        ["ffmpeg", "-y", "-i", str(video), "-i", str(cap_track),
-         "-filter_complex", "[0:v][1:v]blend=all_mode=screen[v]",
-         "-map", "[v]", "-map", "0:a?",
-         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "copy",
-         str(out)],
-        check=False, timeout=300,
-    )
+    # Concat all segments
+    concat_txt = cap_dir / "seg_concat.txt"
+    concat_txt.write_text("\n".join(f"file '{p}'" for p in seg_clips))
+    cap_video = cap_dir / "cap_video.mp4"
+    _run([
+        "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_txt),
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", str(cap_video),
+    ], check=False, timeout=180)
+
+    if not cap_video.exists() or cap_video.stat().st_size < 1000:
+        log.warning("  Caption concat failed — using uncaptioned video")
+        shutil.copy(video, out); return out
+
+    # Merge original audio stream back in
+    r = _run([
+        "ffmpeg", "-y", "-i", str(cap_video), "-i", str(video),
+        "-map", "0:v", "-map", "1:a?",
+        "-c:v", "copy", "-c:a", "copy", str(out),
+    ], check=False, timeout=60)
+
     if not out.exists() or out.stat().st_size < 1000:
-        log.warning(f"  Screen blend failed: {r.stderr[-200:]}")
+        log.warning("  Caption audio merge failed — using uncaptioned video")
         shutil.copy(video, out)
     else:
-        log.info(f"  → captioned.mp4 ({len(chunks)} blocks, screen-blend)")
+        log.info(f"  → captioned.mp4 ({len(chunks)} blocks, RGBA segment overlay)")
     return out
 
 
