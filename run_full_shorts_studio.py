@@ -1595,7 +1595,17 @@ def engine_30_caption(video: Path, script: Dict, brief: Dict = None) -> Path:
         chunk   = words[current_word:current_word + chunk_size]
         t_start = current_word / wps
         t_end   = min((current_word + len(chunk)) / wps, dur)
-        text    = " ".join(chunk).replace("'", "\\'").replace(":", "\\:").replace(",","\\,")
+        text    = (
+            " ".join(chunk)
+            .replace("\\", "\\\\")   # backslash first
+            .replace("'",  "’") # curly apostrophe — avoids shell quoting nightmare
+            .replace(":",  "\\:")
+            .replace(",",  "\\,")
+            .replace("%",  "\\%")    # % is a format specifier in drawtext
+            .replace("$",  "\\$")    # $ is a format specifier in drawtext
+            .replace("[",  "\\[")
+            .replace("]",  "\\]")
+        )
 
         # every-other chunk: alternate white / accent color for visual rhythm
         color = accent_draw if (current_word // chunk_size) % 3 == 2 else style["color"]
@@ -1625,7 +1635,7 @@ def engine_30_caption(video: Path, script: Dict, brief: Dict = None) -> Path:
 
     if not out.exists():
         import shutil; shutil.copy(video, out)
-        log.warning("  Caption drawtext failed — using uncaptioned video")
+        log.warning(f"  Caption drawtext failed — ffmpeg stderr: {r.stderr[-300:]}")
     else:
         log.info(f"  → captioned.mp4 ({len(filters)} blocks, style: {structural or 'default'})")
     return out
@@ -2625,6 +2635,8 @@ def main_test() -> Path:
         # PAI clips (restored from cache each run)
         "pai_clip_00.mp4", "pai_clip_01.mp4", "pai_clip_02.mp4",
         "nac_perf_hook.mp4", "nac_perf_analysis.mp4", "nac_perf_conclusion.mp4",
+        # Chart data — must refresh so candles are different each run
+        "chart_data_TSLA.json", "chart_data_AAPL.json", "chart_data_NVDA.json",
         # Remotion renders — must regenerate so new AI brief takes effect
         "hook.mp4", "stat.mp4", "cta_mg.mp4", "outro.mp4", "trading_chart.mp4",
         # Pipeline
