@@ -1102,6 +1102,20 @@ def engine_24_shot_renderer(
         frames = max(30, int(dur * 30))
         fname  = f"shots/shot_{sid:03d}.mp4"
 
+        # Enforce trade-direction bg — override generic dark-blue defaults
+        # (#0a0a1a, #04040c, etc.) that look purple on screen
+        _BLUE_DEFAULTS = {"#0a0a1a", "#04040c", "#000814", "#020610", "#070002",
+                          "#04040C", "#0A0A1A", "#000814", "#020610"}
+        _trade_bg = (
+            "#180000" if idea.direction.upper() == "SHORT" else
+            "#001408" if idea.direction.upper() == "LONG"  else
+            "#0a0800"
+        )
+        if bg_s in _BLUE_DEFAULTS or not bg_s:
+            bg_s = _trade_bg
+        if bg_e in _BLUE_DEFAULTS or not bg_e:
+            bg_e = "#000000"
+
         if comp == "TradingChart":
             props = dict(chart_data)
             props.update({
@@ -1833,10 +1847,12 @@ def engine_33_render(
         sfx_streams.append("[bgm]")
 
     # Mix narration + all sfx + bgm
-    all_audio = ["[1:a]volume=1.0[nar]"] + sfx_filters
+    # volume=2.5 on narration so it stays clearly audible over sfx/music
+    # normalize=0 disables amix auto-normalization (which would divide each stream by N)
+    all_audio = ["[1:a]volume=2.5[nar]"] + sfx_filters
     mix_inputs = "[nar]" + "".join(sfx_streams)
     n_mix = 1 + len(sfx_streams)
-    all_audio.append(f"{mix_inputs}amix=inputs={n_mix}:duration=longest[aout]")
+    all_audio.append(f"{mix_inputs}amix=inputs={n_mix}:duration=longest:normalize=0[aout]")
 
     fc = ";".join(all_audio)
     body_out = OUT / "body.mp4"
