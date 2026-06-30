@@ -2347,32 +2347,39 @@ def main():
 
 
 def engine_11_long_script(micro_story: str, idea: ShortIdea, viral_moment: str) -> Dict:
-    """Long-format script engine — generates 3-5 minute structured narration."""
-    log.info("[11L] Long Script Engine — generating 3-5 minute structured script")
+    """Long-format script engine — generates 5-8 minute structured narration."""
+    log.info("[11L] Long Script Engine — generating 5-8 minute structured script")
     result = _json_claude(
         "You are the Long-Format Script Engine for YouTube. "
-        "Generate a 3-minute structured video script. "
+        "Generate a 6-minute video script (target: 900 words of narration at 150 wpm). "
+        "Be thorough, storytelling-rich, and educational. DO NOT rush. "
         "Return ONLY valid JSON with these keys: "
-        "{\"hook_text\": \"<8 words>\", \"hook_subtext\": \"<10 words>\", "
-        "\"intro_narration\": \"<30 words — set the scene>\", "
+        "{\"hook_text\": \"<8 words max>\", "
+        "\"hook_subtext\": \"<12 words>\", "
+        "\"intro_narration\": \"<60 words — dramatic scene-setting, pull viewer in>\", "
         "\"reveal_stat\": \"<key stat>\", "
-        "\"body_section_1\": \"<60 words — the setup and context>\", "
-        "\"body_section_2\": \"<60 words — the signal and decision>\", "
-        "\"body_section_3\": \"<60 words — the trade execution and result>\", "
-        "\"analysis_narration\": \"<40 words — what the AI saw that humans missed>\", "
-        "\"cta_text\": \"<8 words>\", "
-        "\"full_narration\": \"<complete 180s narration, approx 360 words>\", "
-        "\"duration_seconds\": 180}",
-        f"Story: {micro_story[:600]}\nTicker: {idea.ticker} PnL: {idea.pnl:+.0f} "
-        f"Direction: {idea.direction} Strategy: {idea.strategy}\nViral moment: {viral_moment}",
-        max_tokens=2000,
+        "\"body_section_1\": \"<120 words — the market context and setup, what was happening>\", "
+        "\"body_section_2\": \"<120 words — the AI signal: what it detected and why it mattered>\", "
+        "\"body_section_3\": \"<120 words — the trade decision, entry, and live execution>\", "
+        "\"body_section_4\": \"<100 words — the market reaction, what unfolded after entry>\", "
+        "\"body_section_5\": \"<100 words — the exit, the result, and what the AI got right>\", "
+        "\"analysis_narration\": \"<80 words — deep dive: what humans missed, what AI saw>\", "
+        "\"lesson_narration\": \"<60 words — what this trade teaches us about AI trading>\", "
+        "\"cta_text\": \"<10 words>\", "
+        "\"full_narration\": \"<complete 5-8 min narration, 850-1000 words, natural flowing speech>\", "
+        "\"duration_seconds\": 380}",
+        f"Story: {micro_story[:800]}\nTicker: {idea.ticker} PnL: {idea.pnl:+.0f} "
+        f"Direction: {idea.direction} Strategy: {idea.strategy} Score: {idea.score}\n"
+        f"Viral moment: {viral_moment}",
+        max_tokens=4000,
     )
-    raw_dur = result.get("duration_seconds", 180)
+    raw_dur = result.get("duration_seconds", 380)
     if isinstance(raw_dur, str):
         import re as _re; nums = _re.findall(r"[\d.]+", str(raw_dur))
-        raw_dur = float(nums[0]) if nums else 180.0
-    result["duration_seconds"] = max(120.0, min(float(raw_dur), 240.0))
-    log.info(f"  → Hook: \"{result.get('hook_text','')[:50]}\" | Duration: {result['duration_seconds']}s")
+        raw_dur = float(nums[0]) if nums else 380.0
+    result["duration_seconds"] = max(300.0, min(float(raw_dur), 480.0))
+    word_count = len(result.get("full_narration", "").split())
+    log.info(f"  → Hook: \"{result.get('hook_text','')[:50]}\" | Duration: {result['duration_seconds']}s | Words: {word_count}")
     return result
 
 
