@@ -2693,25 +2693,40 @@ def main_test() -> Path:
     visual_plan = engine_18_visual_planning(shots, script, idea)
     asset_plan  = engine_19_asset_planning(visual_plan, idea)
 
-    # ── PRODUCTION — use cached PAI clips, no new PAI spend ─────────────────
+    # ── PRODUCTION — 1 fresh PAI hook clip (~$1.20), rest cached ─────────────
     log.info("\n━━━━━━━━━━━━━━━━━━━━ PRODUCTION LAYER ━━━━━━━━━━━━━━━━━━━━")
     _PAI_CACHE = Path(__file__).parent / "pai_cache"
-    _CACHE_MAP = {
-        "nac_perf_hook.mp4":        OUT / "nac_perf_hook.mp4",
-        "nac_perf_analysis.mp4":    OUT / "nac_perf_analysis.mp4",
-        "nac_perf_conclusion.mp4":  OUT / "nac_perf_conclusion.mp4",
-        "pai_clip_00.mp4":          OUT / "pai_clip_00.mp4",
-    }
-    for src_name, dst in _CACHE_MAP.items():
-        src = _PAI_CACHE / src_name
-        if src.exists() and not dst.exists():
-            import shutil; shutil.copy2(src, dst)
-    nac_perf_clips = [OUT / f for f in ("nac_perf_hook.mp4", "nac_perf_analysis.mp4", "nac_perf_conclusion.mp4") if (OUT / f).exists()]
-    log.info(f"  [20] NAC Performance — using {len(nac_perf_clips)} cached clips (0 PAI credits)")
-    _ = engine_21_student_performance()
 
+    # Restore analysis + conclusion from cache (static, not the focus)
+    import shutil
+    for src_name, dst_name in [("nac_perf_analysis.mp4", "nac_perf_analysis.mp4"),
+                                ("nac_perf_conclusion.mp4", "nac_perf_conclusion.mp4"),
+                                ("pai_clip_00.mp4", "pai_clip_00.mp4")]:
+        src, dst = _PAI_CACHE / src_name, OUT / dst_name
+        if src.exists() and not dst.exists():
+            shutil.copy2(src, dst)
+
+    # Generate 1 fresh hook clip using AI-directed prompt (~$1.20, 4s)
+    log.info("  [20] NAC Performance — generating 1 fresh hook clip (AI-directed)")
+    hook_clip = OUT / "nac_perf_hook.mp4"
+    try:
+        _pai_tunnel_check()
+        hook_prompt = (
+            brief.get("nac_performance_prompts", {}).get("hook_moment")
+            or f"Indian male analyst with glasses, {brief.get('structural_idea','CONFESSION').lower()} emotional reaction "
+               f"to {idea.direction} trade on {idea.ticker}, cinematic dark lighting, 9:16 vertical"
+        )
+        _pai_generate(hook_prompt, dur=4, out_path=hook_clip, use_char_ref=True)
+        log.info(f"  → nac_perf_hook.mp4 (fresh, AI prompt)")
+    except Exception as e:
+        log.warning(f"  Fresh hook clip failed ({e}) — using cached")
+        src = _PAI_CACHE / "nac_perf_hook.mp4"
+        if src.exists(): shutil.copy2(src, hook_clip)
+
+    nac_perf_clips = [OUT / f for f in ("nac_perf_hook.mp4", "nac_perf_analysis.mp4", "nac_perf_conclusion.mp4") if (OUT / f).exists()]
+    _ = engine_21_student_performance()
     pai_clips = [OUT / "pai_clip_00.mp4"] if (OUT / "pai_clip_00.mp4").exists() else []
-    log.info(f"  [22] AI Visual — using {len(pai_clips)} cached clip(s) (0 PAI credits)")
+    log.info(f"  [22] AI Visual — using {len(pai_clips)} cached B-roll clip(s)")
     chart_data     = engine_23_dashboard(idea)
     motion_clips   = engine_24_motion_graphics(script, idea, brief, chart_data)
     chart_vfx      = engine_25_vfx(motion_clips["TradingChart"])
