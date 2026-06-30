@@ -61,32 +61,58 @@ def run_long_pipeline():
     _telegram("⚠️ run_long_pipeline() was called but is DISABLED. Use run_full_shorts_studio.py.")
 
 
+def _run_studio(mode: str = "short"):
+    """Core: run the studio pipeline via subprocess. mode='short'|'long'."""
+    studio_path = Path(__file__).parent / "run_full_shorts_studio.py"
+    cmd = ["python", str(studio_path)]
+    if mode == "long":
+        cmd.append("--long")
+    result = subprocess.run(cmd, capture_output=False, timeout=7200)
+    return result.returncode
+
+
 def run_full_shorts_studio_pipeline():
     """Daily 4 PM ET — run the 38-engine full shorts pipeline."""
     if _deploy_guard():
         return
-    log.info("=== Daily: 38-Engine Full Shorts Studio (4 PM ET) ===")
+    log.info("=== Daily: 38-Engine Full Shorts Studio [short] (4 PM ET) ===")
     if not _pipeline_lock.acquire(blocking=False):
         log.warning("Pipeline already running — skipping")
         return
     try:
-        import sys as _sys
-        import subprocess
-        studio_path = Path(__file__).parent / "run_full_shorts_studio.py"
-        result = subprocess.run(
-            ["python", str(studio_path)],
-            capture_output=False,
-            timeout=3600,
-        )
-        if result.returncode == 0:
+        code = _run_studio("short")
+        if code == 0:
             log.info("=== Full shorts studio complete ===")
             _telegram("✅ NacArtha daily short ready (38-engine pipeline)")
         else:
-            log.error(f"Studio pipeline exited with code {result.returncode}")
-            _telegram(f"❌ NacArtha studio pipeline FAILED (exit {result.returncode})")
+            log.error(f"Studio pipeline exited with code {code}")
+            _telegram(f"❌ NacArtha studio pipeline FAILED (exit {code})")
     except Exception as e:
         log.error(f"Studio pipeline error: {e}", exc_info=True)
         _telegram(f"❌ NacArtha studio pipeline FAILED:\n`{e}`")
+    finally:
+        _pipeline_lock.release()
+
+
+def run_long_format_pipeline():
+    """Monday 4 PM ET — 38-engine long-format (3-5 min) video pipeline."""
+    if _deploy_guard():
+        return
+    log.info("=== Monday: 38-Engine LONG FORMAT pipeline (4 PM ET) ===")
+    if not _pipeline_lock.acquire(blocking=False):
+        log.warning("Pipeline already running — skipping")
+        return
+    try:
+        code = _run_studio("long")
+        if code == 0:
+            log.info("=== Long format studio complete ===")
+            _telegram("✅ NacArtha long video ready (38-engine pipeline, long format)")
+        else:
+            log.error(f"Long format pipeline exited with code {code}")
+            _telegram(f"❌ NacArtha long format pipeline FAILED (exit {code})")
+    except Exception as e:
+        log.error(f"Long format pipeline error: {e}", exc_info=True)
+        _telegram(f"❌ NacArtha long format pipeline FAILED:\n`{e}`")
     finally:
         _pipeline_lock.release()
 
@@ -297,24 +323,29 @@ def _telegram(text: str):
         pass
 
 
-def _fire_pipeline(langs: list, mode: str = "long"):
+def _fire_pipeline(langs: list, mode: str = "short"):
     if not _pipeline_lock.acquire(blocking=False):
         log.warning("Pipeline already running — skipping manual fire")
         return
     try:
-        import sys as _sys
-        _sys.modules.pop("nac_orchestrator", None)
-        import nac_orchestrator
-        log.info(f"=== Manual fire: mode={mode} langs={langs} ===")
-        if mode == "short":
-            log.warning("mode=short is disabled — not posting YouTube Shorts")
-        elif mode == "trailer":
+        log.info(f"=== Manual fire: mode={mode} ===")
+        if mode == "trailer":
             _pipeline_lock.release()   # run_trailer_upload acquires its own lock
             run_trailer_upload()
             return
+        elif mode == "long":
+            code = _run_studio("long")
+            label = "long format"
         else:
-            nac_orchestrator.main(langs=langs, on_lang_done=_mark_lang_done)
-        log.info("=== Manual fire complete ===")
+            # mode="short" or default
+            code = _run_studio("short")
+            label = "short"
+        if code == 0:
+            log.info(f"=== Manual fire [{label}] complete ===")
+            _telegram(f"✅ NacArtha manual fire [{label}] complete")
+        else:
+            log.error(f"Manual fire [{label}] exited with code {code}")
+            _telegram(f"❌ NacArtha manual fire [{label}] FAILED (exit {code})")
     except Exception as e:
         log.error(f"Manual fire failed: {e}", exc_info=True)
         _telegram(f"❌ NacArtha manual fire FAILED:\n`{e}`")
@@ -463,10 +494,18 @@ def _start_dashboard_server():
 
 scheduler = BlockingScheduler()
 
-# Daily 4 PM ET — 38-engine full shorts studio pipeline
+# Monday 4 PM ET — long-format (3-5 min) video
+scheduler.add_job(
+    run_long_format_pipeline,
+    CronTrigger(day_of_week="mon", hour=16, minute=0, timezone="America/New_York"),
+    max_instances=1,
+    misfire_grace_time=None,
+)
+
+# Tue-Sun 4 PM ET — daily short (60s)
 scheduler.add_job(
     run_full_shorts_studio_pipeline,
-    CronTrigger(day_of_week="mon-sun", hour=16, minute=0, timezone="America/New_York"),
+    CronTrigger(day_of_week="tue-sun", hour=16, minute=0, timezone="America/New_York"),
     max_instances=1,
     misfire_grace_time=None,
 )

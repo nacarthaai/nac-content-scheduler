@@ -484,6 +484,19 @@ Return ONLY valid JSON with NO comments:
 {{
   "visual_style": "<one sentence — what this video feels like>",
   "structural_idea": "<CONFESSION|THRILLER|INVESTIGATION|IMPACT|SPLIT|EDITORIAL|BROADCAST|WORD_PUNCH>",
+  "music_mood": "<tension|urgency|dread|revelation|intrigue — pick by story energy>",
+  "camera_style": "<confessional|investigative|broadcast|kinetic|cinematic|documentary — drives camera motion engine>",
+  "sfx_profile": "<impact|tension|reveal|dramatic|soft — drives sfx engine>",
+  "nac_performance_prompts": {{
+    "hook_moment": "<4s PAI char-ref clip: NAC's first emotional reaction — shock/urgency/excitement matching story opening. Indian male analyst with glasses, 9:16 vertical, 4K>",
+    "analysis_moment": "<6s PAI char-ref clip: NAC deeply analyzing the trade data — pointing at screen, leaning in, studying chart. Indian male analyst with glasses, 9:16 vertical, 4K>",
+    "conclusion_moment": "<4s PAI char-ref clip: NAC's final reaction to the outcome — satisfied/surprised/contemplative. Indian male analyst with glasses, 9:16 vertical, 4K>"
+  }},
+  "broll_prompts": [
+    "<B-roll prompt 1: establishing environment, no people, no person, 9:16 cinematic>",
+    "<B-roll prompt 2: data detail / chart close-up, no people, no person, 9:16 cinematic>",
+    "<B-roll prompt 3: mood/atmosphere shot, no people, no person, 9:16 cinematic>"
+  ],
   "pai_clip_prompts": {{
     "char_ref": "<complete PAI prompt for 8s NAC char-ref clip — vary action+lighting+camera+energy to match this video's story. End with: Indian male analyst with glasses, 9:16 vertical cinematic, 4K quality>",
     "broll": "<complete PAI prompt for 6s B-roll, empty environment only. Vary subject+angle+color. Must include: no people, no person, no human body parts, 9:16 vertical cinematic, 4K>"
@@ -500,8 +513,7 @@ Return ONLY valid JSON with NO comments:
     "bg_gradient_start": "<dark hex>",
     "bg_gradient_end": "<darker hex>",
     "grain": <0.2-0.5>,
-    "vignette": <0.3-0.7>,
-    "sfx_profile": "<impact|tension|reveal|dramatic|soft>"
+    "vignette": <0.3-0.7>
   }}
 }}""",
         f"Ticker: {idea.ticker} {idea.direction} PnL={idea.pnl}. "
@@ -513,11 +525,15 @@ Return ONLY valid JSON with NO comments:
     spec  = result.get("remotion_spec", {})
     idea_ = result.get("structural_idea", "?")
     pai_prompts = result.get("pai_clip_prompts", {})
+    nac_perf    = result.get("nac_performance_prompts", {})
+    broll_list  = result.get("broll_prompts", [])
     log.info(f"  → Idea: {idea_} | Style: {result.get('visual_style','')[:50]}")
+    log.info(f"  → Music: {result.get('music_mood','?')} | Camera: {result.get('camera_style','?')} | SFX: {result.get('sfx_profile','?')}")
     log.info(f"  → Color: {spec.get('color_primary','?')} | bg: {spec.get('bg_gradient_start','?')}")
     hook_layers = result.get("hook_program", {}).get("layers", [])
     stat_layers = result.get("stat_program", {}).get("layers", [])
     log.info(f"  → hook_program: {len(hook_layers)} layers | stat_program: {len(stat_layers)} layers")
+    log.info(f"  → nac_perf: {len([v for v in nac_perf.values() if v])} clips | broll: {len(broll_list)} prompts")
     if pai_prompts.get("char_ref"):
         log.info(f"  → PAI char_ref: \"{pai_prompts['char_ref'][:80]}...\"")
     if pai_prompts.get("broll"):
@@ -582,10 +598,74 @@ def engine_19_asset_planning(visual_plan: List[Dict], idea: ShortIdea) -> Dict:
 # PHASE 4 — PRODUCTION LAYER (Engines 20-27)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def engine_20_nac_performance(script: Dict) -> None:
-    log.info("[20] NAC Performance Engine — no HeyGen clips (PAI visuals used instead)")
-    log.info("  → NAC visuals handled by Engine 22 (PAI) + Engine 24 (Remotion)")
-    return None
+def engine_20_nac_performance(script: Dict, brief: Dict = None) -> List[Path]:
+    """Generate NAC character performance clips via PAI (char-ref clips).
+    Returns up to 3 clips: hook reaction, analysis moment, conclusion reaction.
+    Falls back gracefully — timeline engine handles missing clips."""
+    log.info("[20] NAC Performance Engine — generating PAI char-ref performance clips")
+    brief = brief or {}
+    clips = []
+
+    try:
+        _pai_tunnel_check()
+    except RuntimeError as e:
+        log.warning(f"  [20] PAI tunnel unavailable — skipping NAC performance clips: {e}")
+        return clips
+
+    nac_prompts = brief.get("nac_performance_prompts", {})
+    structural  = brief.get("structural_idea", "")
+
+    # Default performance prompts per structural idea (vary the NAC behavior)
+    _HOOK_DEFAULTS = {
+        "CONFESSION":    "Indian male analyst with glasses looking directly into camera with guilt, dim monitor backlight, close-up face, silent expression says everything, 9:16 vertical cinematic, 4K quality",
+        "THRILLER":      "Indian male analyst with glasses suddenly turning to camera with alarmed expression, multiple screens flashing, urgent energy, medium shot, 9:16 vertical cinematic, 4K quality",
+        "INVESTIGATION": "Indian male analyst with glasses leaning forward squinting at data, cold blue light, concentrated analytical expression, over-shoulder camera, 9:16 vertical cinematic, 4K quality",
+        "IMPACT":        "Indian male analyst with glasses frozen staring at screen, jaw slightly open, pure screen backlight, Dutch angle, 9:16 vertical cinematic, 4K quality",
+        "BROADCAST":     "Indian male analyst with glasses facing camera confidently, professional lighting, medium shot, authoritative posture, 9:16 vertical cinematic, 4K quality",
+        "WORD_PUNCH":    "Extreme close-up Indian male analyst with glasses, intense focused stare into lens, half face in shadow, single screen glow, 9:16 vertical cinematic, 4K quality",
+        "SPLIT":         "Indian male analyst with glasses pointing at two different screens, split energy, dramatic side lighting, 9:16 vertical cinematic, 4K quality",
+        "EDITORIAL":     "Indian male analyst with glasses reading documents with furrowed brow, warm desk lamp, thoughtful serious expression, 9:16 vertical cinematic, 4K quality",
+    }
+    _ANALYSIS_DEFAULTS = {
+        "CONFESSION":    "Indian male analyst with glasses sitting quietly at desk, head slightly down reviewing chart, regretful contemplation, amber monitor glow, 9:16 vertical cinematic, 4K quality",
+        "THRILLER":      "Indian male analyst with glasses rapidly pointing at multiple screens, urgent kinetic movement, red alert lighting, 9:16 vertical cinematic, 4K quality",
+        "INVESTIGATION": "Indian male analyst with glasses using finger to trace chart pattern on screen, clinical precision, cold blue light, 9:16 vertical cinematic, 4K quality",
+        "IMPACT":        "Indian male analyst with glasses typing rapidly while watching live chart, high stress, multiple screens, white monitor glare, 9:16 vertical cinematic, 4K quality",
+        "BROADCAST":     "Indian male analyst with glasses gesturing toward chart on screen beside him, explaining to camera, broadcast studio light, 9:16 vertical cinematic, 4K quality",
+        "WORD_PUNCH":    "Indian male analyst with glasses pointing aggressively at single screen, intense conviction, dramatic backlight, 9:16 vertical cinematic, 4K quality",
+        "SPLIT":         "Indian male analyst with glasses comparing two charts side by side, analytical focus, split-screen monitor setup, 9:16 vertical cinematic, 4K quality",
+        "EDITORIAL":     "Indian male analyst with glasses writing notes while looking at chart, methodical analysis, desk lamp warm light, 9:16 vertical cinematic, 4K quality",
+    }
+    _CONCLUSION_DEFAULTS = {
+        "CONFESSION":    "Indian male analyst with glasses looking at camera with honest expression, accepting outcome, soft side light, close-up, 9:16 vertical cinematic, 4K quality",
+        "THRILLER":      "Indian male analyst with glasses watching final result, relief or tension depending on outcome, screen glow, 9:16 vertical cinematic, 4K quality",
+        "INVESTIGATION": "Indian male analyst with glasses leaning back in chair, arms crossed, case closed body language, cool light, 9:16 vertical cinematic, 4K quality",
+        "IMPACT":        "Indian male analyst with glasses standing back from screens, hands on desk, taking it in, dramatic pause, 9:16 vertical cinematic, 4K quality",
+        "BROADCAST":     "Indian male analyst with glasses facing camera for final word, confident sign-off posture, broadcast light, 9:16 vertical cinematic, 4K quality",
+        "WORD_PUNCH":    "Indian male analyst with glasses looking at camera with final conviction, intense eyes, dark background, 9:16 vertical cinematic, 4K quality",
+        "SPLIT":         "Indian male analyst with glasses relaxing back from screens, conclusion posture, ambient monitor glow, 9:16 vertical cinematic, 4K quality",
+        "EDITORIAL":     "Indian male analyst with glasses closing notebook, satisfied or reflective expression, warm lamp light, 9:16 vertical cinematic, 4K quality",
+    }
+
+    perf_specs = [
+        ("hook",       4, nac_prompts.get("hook_moment")       or _HOOK_DEFAULTS.get(structural,       "Indian male analyst with glasses reacting with surprise to trading chart, dramatic expression, monitor backlight, 9:16 vertical cinematic, 4K quality")),
+        ("analysis",   6, nac_prompts.get("analysis_moment")   or _ANALYSIS_DEFAULTS.get(structural,   "Indian male analyst with glasses deeply analyzing chart on screen, focused expression, cold monitor light, 9:16 vertical cinematic, 4K quality")),
+        ("conclusion", 4, nac_prompts.get("conclusion_moment") or _CONCLUSION_DEFAULTS.get(structural, "Indian male analyst with glasses looking at camera with final expression, cinematic close-up, 9:16 vertical cinematic, 4K quality")),
+    ]
+
+    for name, dur, prompt in perf_specs:
+        out_path = OUT / f"nac_perf_{name}.mp4"
+        if not out_path.exists():
+            try:
+                _pai_generate(prompt, dur=dur, out_path=out_path, use_char_ref=True)
+            except Exception as e:
+                log.warning(f"  [20] NAC perf '{name}' clip failed: {e}")
+        if out_path.exists():
+            clips.append(out_path)
+            log.info(f"  → nac_perf_{name}.mp4")
+
+    log.info(f"  [20] Generated {len(clips)}/3 NAC performance clips")
+    return clips
 
 
 def engine_21_student_performance() -> Optional[Path]:
@@ -1081,24 +1161,69 @@ def engine_25_vfx(trading_chart_path: Path) -> Path:
     return out
 
 
-def engine_26_sfx() -> Dict[str, Path]:
-    log.info("[26] SFX Engine — generating sound effects via ffmpeg lavfi")
-    sfx = {}
-    specs = {
-        "ping":         ("sine=frequency=880:duration=0.25", "ping.mp3"),
-        "reveal":       ("sine=frequency=660:duration=0.5",  "reveal.mp3"),
-        "notification": ("sine=frequency=1047:duration=0.15", "notif.mp3"),
-        "whoosh":       ("anoisesrc=d=0.4:c=white:a=0.15",   "whoosh.mp3"),
+def engine_26_sfx(brief: Dict = None) -> Dict[str, Path]:
+    log.info("[26] SFX Engine — direction-aware sound design via ffmpeg lavfi")
+    brief = brief or {}
+    sfx_profile = (
+        brief.get("sfx_profile")
+        or brief.get("remotion_spec", {}).get("sfx_profile", "tension")
+    ).lower()
+    structural = brief.get("structural_idea", "").upper()
+
+    # ── SFX profiles: each is a dict of {role: (lavfi_filter, filename)} ────
+    _PROFILES = {
+        "impact": {
+            "ping":         ("aevalsrc='0.9*sin(2*PI*60*t)*exp(-10*t)':s=44100:d=0.5",                "ping.mp3"),
+            "reveal":       ("aevalsrc='0.7*sin(2*PI*200*t)*exp(-3*t)+0.3*sin(2*PI*400*t)*exp(-5*t)':s=44100:d=0.6", "reveal.mp3"),
+            "whoosh":       ("aevalsrc='0.5*sin(2*PI*(200+800*t/0.4)*t)*exp(-4*t)':s=44100:d=0.4",   "whoosh.mp3"),
+            "notification": ("aevalsrc='0.6*sin(2*PI*440*t)*exp(-8*t)+0.4*sin(2*PI*880*t)*exp(-12*t)':s=44100:d=0.3", "notif.mp3"),
+        },
+        "tension": {
+            "ping":         ("aevalsrc='0.4*sin(2*PI*220*t)*exp(-2*t)':s=44100:d=0.8",               "ping.mp3"),
+            "reveal":       ("aevalsrc='0.3*sin(2*PI*110*t)+0.2*sin(2*PI*165*t)':s=44100:d=1.0",     "reveal.mp3"),
+            "whoosh":       ("anoisesrc=d=0.6:c=pink:a=0.12",                                          "whoosh.mp3"),
+            "notification": ("aevalsrc='0.5*sin(2*PI*330*t)*exp(-6*t)':s=44100:d=0.2",               "notif.mp3"),
+        },
+        "reveal": {
+            "ping":         ("aevalsrc='0.6*sin(2*PI*880*t)*exp(-8*t)':s=44100:d=0.25",              "ping.mp3"),
+            "reveal":       ("aevalsrc='0.4*sin(2*PI*(300+600*t/0.8)*t)*exp(-1.5*t)':s=44100:d=0.8", "reveal.mp3"),
+            "whoosh":       ("aevalsrc='0.3*sin(2*PI*(100+1200*t/0.5)*t)*exp(-3*t)':s=44100:d=0.5",  "whoosh.mp3"),
+            "notification": ("aevalsrc='0.7*sin(2*PI*1047*t)*exp(-10*t)':s=44100:d=0.15",            "notif.mp3"),
+        },
+        "dramatic": {
+            "ping":         ("aevalsrc='0.8*sin(2*PI*55*t)*exp(-4*t)+0.3*sin(2*PI*110*t)*exp(-6*t)':s=44100:d=0.7", "ping.mp3"),
+            "reveal":       ("aevalsrc='0.5*(sin(2*PI*80*t)+sin(2*PI*120*t))*exp(-1*t)':s=44100:d=1.2", "reveal.mp3"),
+            "whoosh":       ("anoisesrc=d=0.8:c=brown:a=0.18",                                         "whoosh.mp3"),
+            "notification": ("aevalsrc='0.6*sin(2*PI*440*t)*exp(-5*t)':s=44100:d=0.4",               "notif.mp3"),
+        },
+        "soft": {
+            "ping":         ("aevalsrc='0.3*sin(2*PI*660*t)*exp(-5*t)':s=44100:d=0.4",               "ping.mp3"),
+            "reveal":       ("aevalsrc='0.25*sin(2*PI*330*t)*exp(-2*t)':s=44100:d=0.6",              "reveal.mp3"),
+            "whoosh":       ("anoisesrc=d=0.3:c=pink:a=0.08",                                          "whoosh.mp3"),
+            "notification": ("aevalsrc='0.4*sin(2*PI*528*t)*exp(-7*t)':s=44100:d=0.2",               "notif.mp3"),
+        },
     }
-    for name, (lavfi_src, fname) in specs.items():
+
+    # Override profile for specific structural ideas
+    _IDEA_PROFILE_MAP = {
+        "CONFESSION": "soft", "THRILLER": "tension", "INVESTIGATION": "reveal",
+        "IMPACT": "impact",   "BROADCAST": "reveal",  "WORD_PUNCH": "dramatic",
+        "SPLIT": "tension",   "EDITORIAL": "soft",
+    }
+    profile_key = _IDEA_PROFILE_MAP.get(structural, sfx_profile)
+    profile     = _PROFILES.get(profile_key, _PROFILES["tension"])
+    log.info(f"  SFX profile: {profile_key} (structural: {structural or 'default'})")
+
+    sfx = {}
+    for name, (lavfi_src, fname) in profile.items():
         out = OUT / fname
         if not out.exists():
-            r = subprocess.run([
+            subprocess.run([
                 "ffmpeg", "-y", "-f", "lavfi", "-i", lavfi_src,
                 "-ar", "44100", str(out),
             ], capture_output=True, timeout=10)
         sfx[name] = out
-        log.info(f"  → {fname}")
+        log.info(f"  → {fname} [{profile_key}]")
     return sfx
 
 
@@ -1131,46 +1256,75 @@ def engine_28_timeline(
     chart_vfx: Path,
     pai_clips: List[Path],
     narration: Path,
+    nac_perf_clips: List[Path] = None,
+    fmt: str = "short",
 ) -> Path:
-    log.info("[28] Timeline Engine — assembling master timeline")
+    log.info(f"[28] Timeline Engine — assembling {fmt} master timeline")
     out = OUT / "timeline_raw.mp4"
     if out.exists():
         log.info("  [cache] timeline_raw.mp4")
         return out
 
-    concat_file = OUT / "concat.txt"
+    nac_perf_clips = nac_perf_clips or []
+    concat_file    = OUT / "concat.txt"
     ordered: List[Path] = []
 
-    # Section 1: Hook (Remotion kinetic text — flies in from bottom) ~3s
-    if "HookCard" in motion_clips and motion_clips["HookCard"].exists():
-        ordered.append(motion_clips["HookCard"])
-        log.info("  + HookCard (Remotion)")
-
-    # Section 2: PAI cinematic B-roll ~6s (if generated)
-    for clip in pai_clips[:1]:
-        if clip.exists():
-            tmp = OUT / f"pai_trimmed_{clip.stem}.mp4"
+    def _add_clip(path: Optional[Path], label: str, trim_s: float = 0):
+        if not path or not path.exists():
+            return
+        if trim_s > 0:
+            tmp = OUT / f"trimmed_{path.stem}.mp4"
             if not tmp.exists():
-                _run(["ffmpeg","-y","-i",str(clip),"-t","8",
+                _run(["ffmpeg","-y","-i",str(path),"-t",str(trim_s),
                       "-vf","scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
                       "-c:v","libx264","-pix_fmt","yuv420p",str(tmp)])
             ordered.append(tmp)
-            log.info(f"  + PAI clip {clip.stem}")
+        else:
+            ordered.append(path)
+        log.info(f"  + {label}")
 
-    # Section 3: Chart VFX (core trade explanation) ~35s
-    if chart_vfx.exists():
-        ordered.append(chart_vfx)
-        log.info("  + Chart VFX (TSLA)")
+    # ── Hook composition — DynamicScene or preset ────────────────────────────
+    # DynamicScene trumps legacy HookCard if it was rendered
+    for hook_key in ("DynamicScene", "HookCard", "FilmCard", "TypoSlam",
+                     "GlitchHook", "SplitReveal", "WordPunch", "NewsFlash"):
+        if hook_key in motion_clips and motion_clips[hook_key].exists():
+            _add_clip(motion_clips[hook_key], f"{hook_key} (Remotion hook, 3s)")
+            break
 
-    # Section 4: Stat card (Remotion slide-in data card) ~6s
-    if "StatCard" in motion_clips and motion_clips["StatCard"].exists():
-        ordered.append(motion_clips["StatCard"])
-        log.info("  + StatCard (Remotion)")
+    # ── NAC hook reaction clip (engine_20 first clip, 4s) ───────────────────
+    if nac_perf_clips:
+        _add_clip(nac_perf_clips[0], "NAC hook reaction (PAI perf)", trim_s=4)
 
-    # Section 5: CTA card (Remotion pulse) ~5s
-    if "CTACard" in motion_clips and motion_clips["CTACard"].exists():
-        ordered.append(motion_clips["CTACard"])
-        log.info("  + CTACard (Remotion)")
+    # ── PAI cinematic B-roll clip 1 (char-ref clip, 8s trimmed to 6s) ───────
+    if len(pai_clips) > 0:
+        _add_clip(pai_clips[0], f"PAI char-ref ({pai_clips[0].stem})", trim_s=6)
+
+    # ── NAC analysis clip (engine_20 second clip, 6s) ───────────────────────
+    if len(nac_perf_clips) > 1 and fmt == "long":
+        _add_clip(nac_perf_clips[1], "NAC analysis (PAI perf)", trim_s=6)
+
+    # ── Chart VFX (core trade explanation ~35s) ──────────────────────────────
+    _add_clip(chart_vfx, "Chart VFX (animated trading chart)", trim_s=0)
+
+    # ── PAI B-roll clip 2 (environment, 6s) — adds visual break ─────────────
+    if len(pai_clips) > 1:
+        _add_clip(pai_clips[1], f"PAI B-roll ({pai_clips[1].stem})", trim_s=6)
+
+    # ── Long format: NAC conclusion + more B-roll ────────────────────────────
+    if fmt == "long":
+        if len(nac_perf_clips) > 2:
+            _add_clip(nac_perf_clips[2], "NAC conclusion (PAI perf)", trim_s=4)
+        if len(pai_clips) > 2:
+            _add_clip(pai_clips[2], f"PAI B-roll 3 ({pai_clips[2].stem})", trim_s=6)
+
+    # ── Stat composition ─────────────────────────────────────────────────────
+    for stat_key in ("DynamicStat", "ImpactStat", "WinLoseSlam", "DataReveal", "StatCard"):
+        if stat_key in motion_clips and motion_clips[stat_key].exists():
+            _add_clip(motion_clips[stat_key], f"{stat_key} (Remotion stat, 6s)")
+            break
+
+    # ── CTA card ─────────────────────────────────────────────────────────────
+    _add_clip(motion_clips.get("CTACard"), "CTACard (Remotion CTA)")
 
     if not ordered:
         raise RuntimeError("[28] Timeline Engine: no clips to assemble — all production engines failed")
@@ -1204,25 +1358,86 @@ def engine_28_timeline(
     return out
 
 
-def engine_29_camera_motion(video: Path) -> Path:
-    log.info("[29] Camera Motion Engine — applying track + zoom")
+def engine_29_camera_motion(video: Path, brief: Dict = None) -> Path:
+    log.info("[29] Camera Motion Engine — direction-aware camera motion")
     out = OUT / "camera.mp4"
     if out.exists():
         log.info("  [cache] camera.mp4")
         return out
 
-    dur = _duration(video)
+    brief = brief or {}
+    camera_style  = brief.get("camera_style", "cinematic").lower()
+    structural    = brief.get("structural_idea", "").upper()
+
+    dur          = _duration(video)
     total_frames = int(dur * 30)
     if total_frames < 2:
         import shutil; shutil.copy(video, out); return out
 
-    # Gentle push-in zoom: 1.00 → 1.04 over full duration
-    vf = (
-        f"zoompan=z='1+0.04*in/{total_frames}'"
-        f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-        f":d=1:s=1080x1920:fps=30"
-    )
-    r = _run([
+    # ── Camera motion profiles ───────────────────────────────────────────────
+    # confessional — very slow intimate push-in (1.00 → 1.03)
+    # investigative — slow pull-back then push (1.04 → 1.00 → 1.03)
+    # broadcast — stable, almost no motion (1.00 → 1.01)
+    # kinetic — faster push with vertical drift (1.00 → 1.08, slight y drift)
+    # cinematic — smooth push-in (1.00 → 1.05, center lock)
+    # documentary — slight handheld simulation via zoompan jitter
+    _IDEA_STYLE = {
+        "CONFESSION":    "confessional",
+        "THRILLER":      "kinetic",
+        "INVESTIGATION": "investigative",
+        "IMPACT":        "kinetic",
+        "BROADCAST":     "broadcast",
+        "WORD_PUNCH":    "kinetic",
+        "SPLIT":         "cinematic",
+        "EDITORIAL":     "confessional",
+    }
+    style = _IDEA_STYLE.get(structural, camera_style)
+    log.info(f"  Camera style: {style} (structural: {structural or camera_style})")
+
+    if style == "confessional":
+        # very slow push-in 1.00 → 1.03
+        vf = (
+            f"zoompan=z='1+0.03*in/{total_frames}'"
+            f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+            f":d=1:s=1080x1920:fps=30"
+        )
+    elif style == "investigative":
+        # pull back then push: zoom starts at 1.03, goes to 1.00, then 1.035
+        vf = (
+            f"zoompan=z='if(lt(in,{total_frames//2}),1.03-0.03*in/{total_frames//2},1.0+0.035*(in-{total_frames//2})/{total_frames//2})'"
+            f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+            f":d=1:s=1080x1920:fps=30"
+        )
+    elif style == "broadcast":
+        # nearly static, micro-zoom 1.00 → 1.01
+        vf = (
+            f"zoompan=z='1+0.01*in/{total_frames}'"
+            f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+            f":d=1:s=1080x1920:fps=30"
+        )
+    elif style == "kinetic":
+        # faster push 1.00 → 1.08 with slight upward drift
+        vf = (
+            f"zoompan=z='1+0.08*in/{total_frames}'"
+            f":x='iw/2-(iw/zoom/2)':y='max(0,ih/2-(ih/zoom/2)-{total_frames//4}*in/{total_frames})'"
+            f":d=1:s=1080x1920:fps=30"
+        )
+    elif style == "documentary":
+        # subtle hand-held feel — micro jitter via periodic oscillation
+        vf = (
+            f"zoompan=z='1.02+0.01*sin(2*PI*in/90)'"
+            f":x='iw/2-(iw/zoom/2)+4*sin(2*PI*in/45)':y='ih/2-(ih/zoom/2)+3*sin(2*PI*in/60)'"
+            f":d=1:s=1080x1920:fps=30"
+        )
+    else:
+        # cinematic — smooth push 1.00 → 1.05
+        vf = (
+            f"zoompan=z='1+0.05*in/{total_frames}'"
+            f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+            f":d=1:s=1080x1920:fps=30"
+        )
+
+    _run([
         "ffmpeg", "-y", "-i", str(video),
         "-vf", vf,
         "-c:v", "libx264", "-pix_fmt", "yuv420p",
@@ -1230,7 +1445,8 @@ def engine_29_camera_motion(video: Path) -> Path:
     ], check=False)
     if not out.exists():
         import shutil; shutil.copy(video, out)
-    log.info(f"  → camera.mp4 (push-in zoom applied)")
+        log.warning(f"  zoompan failed — copying unchanged")
+    log.info(f"  → camera.mp4 (style: {style})")
     return out
 
 
@@ -1259,50 +1475,85 @@ def _generate_narration(narration_text: str) -> Path:
     return out
 
 
-def engine_30_caption(video: Path, script: Dict) -> Path:
-    log.info("[30] Caption Engine — building SRT from script + burning captions")
-    srt_path = OUT / "captions.srt"
+def engine_30_caption(video: Path, script: Dict, brief: Dict = None) -> Path:
+    log.info("[30] Caption Engine — drawtext captions (no libass required)")
     out = OUT / "captioned.mp4"
     if out.exists():
         log.info("  [cache] captioned.mp4")
         return out
 
-    # Build SRT from script sections
+    brief        = brief or {}
+    structural   = brief.get("structural_idea", "").upper()
+    color_spec   = brief.get("remotion_spec", {})
+    accent_hex   = color_spec.get("color_primary", "#f59e0b").lstrip("#")
+
+    # accent_hex → drawtext color format 0xRRGGBB
+    accent_draw = "0x" + accent_hex.upper()
+
     full_text = script.get("full_narration", "")
-    words = full_text.split()
-    dur = script.get("duration_seconds", 55.0)
-    wps = len(words) / dur  # words per second
-    srt_lines = []
-    idx = 1
-    chunk_size = 7
+    words     = full_text.split()
+    dur       = _duration(video)
+    if not words or dur < 1:
+        import shutil; shutil.copy(video, out); return out
+
+    wps        = len(words) / dur
+    chunk_size = 6   # words per caption line
+
+    # ── Caption style per structural idea ────────────────────────────────────
+    # Position: bottom-third (y = H*0.78), centered
+    # Font: bold, white with black outline (works without libass)
+    _CAPTION_STYLES = {
+        "CONFESSION":    {"size": 44, "color": "white",        "shadow": 3},
+        "THRILLER":      {"size": 48, "color": "white",        "shadow": 4},
+        "INVESTIGATION": {"size": 40, "color": "0xE0F7FA",     "shadow": 3},
+        "IMPACT":        {"size": 52, "color": "white",        "shadow": 5},
+        "BROADCAST":     {"size": 44, "color": "white",        "shadow": 3},
+        "WORD_PUNCH":    {"size": 56, "color": "white",        "shadow": 5},
+        "SPLIT":         {"size": 44, "color": "white",        "shadow": 3},
+        "EDITORIAL":     {"size": 38, "color": "0xFFFDE7",     "shadow": 2},
+    }
+    style = _CAPTION_STYLES.get(structural, {"size": 44, "color": "white", "shadow": 3})
+
+    # Build drawtext filter chain — one overlay per caption block
+    filters = []
     current_word = 0
     while current_word < len(words):
-        chunk = words[current_word:current_word + chunk_size]
+        chunk   = words[current_word:current_word + chunk_size]
         t_start = current_word / wps
-        t_end   = (current_word + len(chunk)) / wps
-        def ts(s):
-            h=int(s//3600); m=int((s%3600)//60); sc=int(s%60); ms=int((s%1)*1000)
-            return f"{h:02d}:{m:02d}:{sc:02d},{ms:03d}"
-        srt_lines.append(f"{idx}\n{ts(t_start)} --> {ts(t_end)}\n{' '.join(chunk)}\n")
-        idx += 1; current_word += chunk_size
-    srt_path.write_text("\n".join(srt_lines), encoding="utf-8")
-    log.info(f"  → {idx-1} caption blocks")
+        t_end   = min((current_word + len(chunk)) / wps, dur)
+        text    = " ".join(chunk).replace("'", "\\'").replace(":", "\\:").replace(",","\\,")
 
-    # Burn captions (font.ttf from assets)
-    font = str(ASSETS / "font.ttf")
+        # every-other chunk: alternate white / accent color for visual rhythm
+        color = accent_draw if (current_word // chunk_size) % 3 == 2 else style["color"]
+
+        filters.append(
+            f"drawtext=text='{text}'"
+            f":fontsize={style['size']}"
+            f":fontcolor={color}"
+            f":borderw={style['shadow']}"
+            f":bordercolor=black@0.85"
+            f":x=(w-text_w)/2"
+            f":y=h*0.78"
+            f":enable='between(t,{t_start:.3f},{t_end:.3f})'"
+        )
+        current_word += chunk_size
+
+    if not filters:
+        import shutil; shutil.copy(video, out); return out
+
+    vf_chain = ",".join(filters)
     r = _run([
         "ffmpeg", "-y", "-i", str(video),
-        "-vf", f"subtitles={srt_path}:force_style='FontName=Arial,FontSize=22,"
-               "PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,Outline=2,"
-               "Bold=1,Alignment=2,MarginV=140'",
+        "-vf", vf_chain,
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "copy",
         str(out),
     ], check=False)
+
     if not out.exists():
         import shutil; shutil.copy(video, out)
-        log.warning("  Caption burn failed (no libass?) — using uncaptioned video")
+        log.warning("  Caption drawtext failed — using uncaptioned video")
     else:
-        log.info(f"  → captioned.mp4 (captions burned)")
+        log.info(f"  → captioned.mp4 ({len(filters)} blocks, style: {structural or 'default'})")
     return out
 
 
@@ -2008,9 +2259,12 @@ def main():
     # ── Clear per-run outputs so nothing is reused from last run ──────────────
     import shutil as _shutil
     _stale = [
-        "pai_clip_00.mp4", "pai_clip_01.mp4",   # PAI clips
+        "pai_clip_00.mp4", "pai_clip_01.mp4", "pai_clip_02.mp4",      # PAI B-roll
+        "nac_perf_hook.mp4", "nac_perf_analysis.mp4", "nac_perf_conclusion.mp4",  # NAC perf
         "timeline_raw.mp4", "camera.mp4",          # assembly
         "chart_vfx.mp4",                           # vfx
+        "captioned.mp4", "transitioned.mp4", "graded.mp4",             # post chain
+        "body.mp4", "final.mp4",                   # render
     ]
     for _f in _stale:
         _p = OUT / _f
@@ -2048,23 +2302,23 @@ def main():
 
     # ── PRODUCTION LAYER ──────────────────────────────────────────────────────
     log.info("\n━━━━━━━━━━━━━━━━━━━━ PRODUCTION LAYER ━━━━━━━━━━━━━━━━━━━━")
-    nac_clip      = engine_20_nac_performance(script)
-    _             = engine_21_student_performance()
-    pai_clips     = engine_22_ai_visual_pai(asset_plan, idea, brief)
-    chart_data    = engine_23_dashboard(idea)
-    motion_clips  = engine_24_motion_graphics(script, idea, brief, chart_data)
-    chart_vfx     = engine_25_vfx(motion_clips["TradingChart"])
-    sfx           = engine_26_sfx()
-    music_path    = engine_27_music(brief)
+    nac_perf_clips = engine_20_nac_performance(script, brief)
+    _              = engine_21_student_performance()
+    pai_clips      = engine_22_ai_visual_pai(asset_plan, idea, brief)
+    chart_data     = engine_23_dashboard(idea)
+    motion_clips   = engine_24_motion_graphics(script, idea, brief, chart_data)
+    chart_vfx      = engine_25_vfx(motion_clips["TradingChart"])
+    sfx            = engine_26_sfx(brief)
+    music_path     = engine_27_music(brief)
 
     # ── POST PRODUCTION ───────────────────────────────────────────────────────
     log.info("\n━━━━━━━━━━━━━━━━━━━ POST PRODUCTION ━━━━━━━━━━━━━━━━━━━━━━")
-    # Generate narration first (needed for render)
     narration = _generate_narration(script.get("full_narration", micro_story))
 
-    timeline      = engine_28_timeline(motion_clips, nac_clip, chart_vfx, pai_clips, narration)
-    camera        = engine_29_camera_motion(timeline)
-    captioned     = engine_30_caption(camera, script)
+    timeline      = engine_28_timeline(motion_clips, None, chart_vfx, pai_clips, narration,
+                                       nac_perf_clips=nac_perf_clips, fmt="short")
+    camera        = engine_29_camera_motion(timeline, brief)
+    captioned     = engine_30_caption(camera, script, brief)
     transitioned  = engine_31_transition(captioned)
     graded        = engine_32_color_grade(transitioned)
     outro_video, outro_audio = engine_32b_outro(script)
@@ -2092,5 +2346,144 @@ def main():
     return url
 
 
+def engine_11_long_script(micro_story: str, idea: ShortIdea, viral_moment: str) -> Dict:
+    """Long-format script engine — generates 3-5 minute structured narration."""
+    log.info("[11L] Long Script Engine — generating 3-5 minute structured script")
+    result = _json_claude(
+        "You are the Long-Format Script Engine for YouTube. "
+        "Generate a 3-minute structured video script. "
+        "Return ONLY valid JSON with these keys: "
+        "{\"hook_text\": \"<8 words>\", \"hook_subtext\": \"<10 words>\", "
+        "\"intro_narration\": \"<30 words — set the scene>\", "
+        "\"reveal_stat\": \"<key stat>\", "
+        "\"body_section_1\": \"<60 words — the setup and context>\", "
+        "\"body_section_2\": \"<60 words — the signal and decision>\", "
+        "\"body_section_3\": \"<60 words — the trade execution and result>\", "
+        "\"analysis_narration\": \"<40 words — what the AI saw that humans missed>\", "
+        "\"cta_text\": \"<8 words>\", "
+        "\"full_narration\": \"<complete 180s narration, approx 360 words>\", "
+        "\"duration_seconds\": 180}",
+        f"Story: {micro_story[:600]}\nTicker: {idea.ticker} PnL: {idea.pnl:+.0f} "
+        f"Direction: {idea.direction} Strategy: {idea.strategy}\nViral moment: {viral_moment}",
+        max_tokens=2000,
+    )
+    raw_dur = result.get("duration_seconds", 180)
+    if isinstance(raw_dur, str):
+        import re as _re; nums = _re.findall(r"[\d.]+", str(raw_dur))
+        raw_dur = float(nums[0]) if nums else 180.0
+    result["duration_seconds"] = max(120.0, min(float(raw_dur), 240.0))
+    log.info(f"  → Hook: \"{result.get('hook_text','')[:50]}\" | Duration: {result['duration_seconds']}s")
+    return result
+
+
+def main_long() -> Optional[str]:
+    """Long-format (3-5 min) YouTube video pipeline — full 38 engines."""
+    log.info("=" * 70)
+    log.info("NacArtha AI Studio — LONG FORMAT (3-5 min) Pipeline")
+    log.info("=" * 70)
+    t0 = time.time()
+
+    # Clear per-run outputs
+    import shutil as _sl
+    _stale_long = [
+        "pai_clip_00.mp4", "pai_clip_01.mp4", "pai_clip_02.mp4",
+        "nac_perf_hook.mp4", "nac_perf_analysis.mp4", "nac_perf_conclusion.mp4",
+        "timeline_raw.mp4", "camera.mp4",
+        "chart_vfx.mp4",
+        "captioned.mp4", "transitioned.mp4", "graded.mp4",
+        "body.mp4", "final.mp4", "narration.mp3",
+    ]
+    for _f in _stale_long:
+        _p = OUT / _f
+        if _p.exists():
+            _p.unlink()
+            log.info(f"  cleared stale: {_f}")
+
+    # ── INTELLIGENCE LAYER ────────────────────────────────────────────────────
+    log.info("\n━━━━━━━━━━━━━━━━━━━ INTELLIGENCE LAYER ━━━━━━━━━━━━━━━━━━━")
+    trades       = engine_1_trade_intelligence()
+    idea         = engine_2_shorts_idea(trades)
+    research     = engine_3_research(idea)
+    context      = engine_4_context(idea, research)
+    angle        = engine_5_story_angle(idea, research, context)
+    audience     = engine_6_audience(idea)
+    goal         = engine_7_goal(idea)
+    viral_moment = engine_8_viral_moment(idea, research)
+
+    # ── WRITING LAYER — long-format script ───────────────────────────────────
+    log.info("\n━━━━━━━━━━━━━━━━━ WRITING LAYER (long) ━━━━━━━━━━━━━━━━━━━")
+    hook        = engine_9_hook(idea, angle, audience)
+    micro_story = engine_10_micro_story(idea, research, hook, goal)
+    script      = engine_11_long_script(micro_story, idea, viral_moment)
+    validation  = engine_12_fact_validation(script, research)
+    script      = engine_13_retention(script, audience)
+    voice_style = engine_14_conversation(script, idea)
+
+    # ── DIRECTION LAYER ───────────────────────────────────────────────────────
+    log.info("\n━━━━━━━━━━━━━━━━━━━━ DIRECTION LAYER ━━━━━━━━━━━━━━━━━━━━━")
+    brief      = engine_15_creative_director(idea, angle, audience, script)
+    director   = engine_16_director(script, brief)
+    shots      = engine_17_shot_planning(director, script)
+    visual_plan = engine_18_visual_planning(shots, script, idea)
+    asset_plan  = engine_19_asset_planning(visual_plan, idea)
+
+    # ── PRODUCTION LAYER — long format uses more clips ───────────────────────
+    log.info("\n━━━━━━━━━━━━━━━━━━━ PRODUCTION LAYER (long) ━━━━━━━━━━━━━━")
+    nac_perf_clips = engine_20_nac_performance(script, brief)
+    _              = engine_21_student_performance()
+    # Generate 3 B-roll clips for long format
+    pai_clips      = engine_22_ai_visual_pai(asset_plan, idea, brief)
+    # Generate extra B-roll from broll_prompts if available
+    broll_extra_prompts = brief.get("broll_prompts", [])
+    for i, extra_prompt in enumerate(broll_extra_prompts[:2]):  # max 2 extra
+        extra_out = OUT / f"pai_clip_0{i+2}.mp4"
+        if not extra_out.exists() and extra_prompt:
+            try:
+                _pai_generate(extra_prompt, dur=6, out_path=extra_out, use_char_ref=False)
+                pai_clips.append(extra_out)
+                log.info(f"  [extra B-roll {i+1}] {extra_out.name}")
+            except Exception as e:
+                log.warning(f"  Extra B-roll {i+1} failed: {e}")
+
+    chart_data   = engine_23_dashboard(idea)
+    motion_clips = engine_24_motion_graphics(script, idea, brief, chart_data)
+    chart_vfx    = engine_25_vfx(motion_clips["TradingChart"])
+    sfx          = engine_26_sfx(brief)
+    music_path   = engine_27_music(brief)
+
+    # ── POST PRODUCTION ───────────────────────────────────────────────────────
+    log.info("\n━━━━━━━━━━━━━━━━━ POST PRODUCTION (long) ━━━━━━━━━━━━━━━━━")
+    narration    = _generate_narration(script.get("full_narration", micro_story))
+    timeline     = engine_28_timeline(motion_clips, None, chart_vfx, pai_clips, narration,
+                                      nac_perf_clips=nac_perf_clips, fmt="long")
+    camera       = engine_29_camera_motion(timeline, brief)
+    captioned    = engine_30_caption(camera, script, brief)
+    transitioned = engine_31_transition(captioned)
+    graded       = engine_32_color_grade(transitioned)
+    outro_video, outro_audio = engine_32b_outro(script)
+    final        = engine_33_render(graded, narration, music_path, sfx, script, outro_video, outro_audio)
+
+    # ── PUBLISHING LAYER ──────────────────────────────────────────────────────
+    log.info("\n━━━━━━━━━━━━━━━━━━━━ PUBLISHING LAYER ━━━━━━━━━━━━━━━━━━━━")
+    cover    = engine_34_cover(script, idea, research, pai_clips=pai_clips, chart_video=chart_vfx)
+    seo      = engine_35_title_seo(script, idea, research)
+    url      = engine_36_publish(final, seo, cover)
+    analytics = engine_37_analytics(url)
+    lessons  = engine_38_learning(url, script, idea)
+
+    elapsed = time.time() - t0
+    log.info("\n" + "=" * 70)
+    log.info(f"LONG FORMAT PIPELINE COMPLETE — {elapsed:.1f}s")
+    log.info(f"  Video:   {final} ({final.stat().st_size/1e6:.1f} MB)")
+    log.info(f"  YouTube: {url or 'FAILED'}")
+    log.info(f"  Engines: 38/38 ran")
+    log.info("=" * 70)
+    return url
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--long" in sys.argv:
+        main_long()
+    else:
+        main()
