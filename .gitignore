@@ -18,3 +18,4 @@ cache/
 !assets/music/*.mp3
 .env
 client_secret.json
+pai_cache/

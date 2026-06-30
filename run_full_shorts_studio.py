@@ -2667,30 +2667,25 @@ def main_test() -> Path:
     visual_plan = engine_18_visual_planning(shots, script, idea)
     asset_plan  = engine_19_asset_planning(visual_plan, idea)
 
-    # ── PRODUCTION — engine_20 SKIPPED, engine_22 limited to 1 clip ──────────
+    # ── PRODUCTION — use cached PAI clips, no new PAI spend ─────────────────
     log.info("\n━━━━━━━━━━━━━━━━━━━━ PRODUCTION LAYER ━━━━━━━━━━━━━━━━━━━━")
-    log.info("  [20] NAC Performance Engine — SKIPPED in test mode (0 PAI credits)")
-    nac_perf_clips = []
-    _              = engine_21_student_performance()
+    _PAI_CACHE = Path(__file__).parent / "pai_cache"
+    _CACHE_MAP = {
+        "nac_perf_hook.mp4":        OUT / "nac_perf_hook.mp4",
+        "nac_perf_analysis.mp4":    OUT / "nac_perf_analysis.mp4",
+        "nac_perf_conclusion.mp4":  OUT / "nac_perf_conclusion.mp4",
+        "pai_clip_00.mp4":          OUT / "pai_clip_00.mp4",
+    }
+    for src_name, dst in _CACHE_MAP.items():
+        src = _PAI_CACHE / src_name
+        if src.exists() and not dst.exists():
+            import shutil; shutil.copy2(src, dst)
+    nac_perf_clips = [OUT / f for f in ("nac_perf_hook.mp4", "nac_perf_analysis.mp4", "nac_perf_conclusion.mp4") if (OUT / f).exists()]
+    log.info(f"  [20] NAC Performance — using {len(nac_perf_clips)} cached clips (0 PAI credits)")
+    _ = engine_21_student_performance()
 
-    # engine_22: generate exactly 1 PAI clip (char-ref only, no B-roll)
-    log.info("  [22] AI Visual — TEST MODE: generating 1 char-ref clip only")
-    pai_clips = []
-    try:
-        _pai_tunnel_check()
-        clip1 = OUT / "pai_clip_00.mp4"
-        if not clip1.exists():
-            char_ref_prompt = (
-                brief.get("pai_clip_prompts", {}).get("char_ref")
-                or f"Indian male analyst with glasses at trading terminal, {idea.direction} trade on {idea.ticker}, "
-                   f"cinematic expression, dark moody lighting, 9:16 vertical cinematic, 4K quality"
-            )
-            _pai_generate(char_ref_prompt, dur=4, out_path=clip1, use_char_ref=True)
-        if clip1.exists():
-            pai_clips.append(clip1)
-            log.info(f"  → 1 PAI clip generated (test mode)")
-    except Exception as e:
-        log.warning(f"  PAI skipped: {e}")
+    pai_clips = [OUT / "pai_clip_00.mp4"] if (OUT / "pai_clip_00.mp4").exists() else []
+    log.info(f"  [22] AI Visual — using {len(pai_clips)} cached clip(s) (0 PAI credits)")
     chart_data     = engine_23_dashboard(idea)
     motion_clips   = engine_24_motion_graphics(script, idea, brief, chart_data)
     chart_vfx      = engine_25_vfx(motion_clips["TradingChart"])
