@@ -520,7 +520,7 @@ Return ONLY valid JSON with NO comments:
         f"Hook text: \"{script.get('hook_text','')}\". "
         f"Category: {idea.category}. Angle: {angle}. Tone: {audience.get('tone','direct')}. "
         f"Direction color hint: {dir_color}. Background hint: {bg_dark}",
-        max_tokens=2000,
+        max_tokens=4000,
     )
     spec  = result.get("remotion_spec", {})
     idea_ = result.get("structural_idea", "?")
@@ -2605,9 +2605,120 @@ def main_long() -> Optional[str]:
     return url
 
 
+def main_test() -> Path:
+    """30-second test run — all 38 engines, no YouTube publish, minimal PAI spend."""
+    import sys as _sys
+    log.info("=" * 70)
+    log.info("NacArtha AI Studio — TEST RUN (30s, all engines, no publish)")
+    log.info("=" * 70)
+    t0 = time.time()
+
+    # Clear stale outputs
+    import shutil as _sl
+    _stale_t = [
+        "pai_clip_00.mp4", "pai_clip_01.mp4", "pai_clip_02.mp4",
+        "nac_perf_hook.mp4", "nac_perf_analysis.mp4", "nac_perf_conclusion.mp4",
+        "timeline_raw.mp4", "camera.mp4", "chart_vfx.mp4",
+        "captioned.mp4", "transitioned.mp4", "graded.mp4",
+        "body.mp4", "final.mp4", "narration.mp3", "chart_move.mp3",
+    ]
+    for _f in _stale_t:
+        _p = OUT / _f
+        if _p.exists():
+            _p.unlink()
+
+    # ── INTELLIGENCE ──────────────────────────────────────────────────────────
+    log.info("\n━━━━━━━━━━━━━━━━━━━ INTELLIGENCE LAYER ━━━━━━━━━━━━━━━━━━━")
+    trades       = engine_1_trade_intelligence()
+    idea         = engine_2_shorts_idea(trades)
+    research     = engine_3_research(idea)
+    context      = engine_4_context(idea, research)
+    angle        = engine_5_story_angle(idea, research, context)
+    audience     = engine_6_audience(idea)
+    goal         = engine_7_goal(idea)
+    viral_moment = engine_8_viral_moment(idea, research)
+
+    # ── WRITING — 30s script ─────────────────────────────────────────────────
+    log.info("\n━━━━━━━━━━━━━━━━━━━━━ WRITING LAYER ━━━━━━━━━━━━━━━━━━━━━━")
+    hook        = engine_9_hook(idea, angle, audience)
+    micro_story = engine_10_micro_story(idea, research, hook, goal)
+    # Override script to 30 seconds
+    script = _json_claude(
+        "You are the Script Engine for a 30-second YouTube test video. "
+        "Return ONLY JSON: {\"hook_text\": \"<8 words>\", \"hook_subtext\": \"<6 words>\", "
+        "\"reveal_stat\": \"<stat>\", \"body_narration\": \"<1 sentence>\", "
+        "\"cta_text\": \"<4 words>\", "
+        "\"full_narration\": \"<complete 30s narration, max 55 words>\", "
+        "\"duration_seconds\": 30}",
+        f"Story: {micro_story[:300]}\nTicker: {idea.ticker} PnL: {idea.pnl} Direction: {idea.direction}",
+        max_tokens=600,
+    )
+    script["duration_seconds"] = 30.0
+    log.info(f"  → Hook: \"{script.get('hook_text','')[:50]}\" | 30s test script")
+    validation  = engine_12_fact_validation(script, research)
+    script      = engine_13_retention(script, audience)
+    voice_style = engine_14_conversation(script, idea)
+
+    # ── DIRECTION ─────────────────────────────────────────────────────────────
+    log.info("\n━━━━━━━━━━━━━━━━━━━━ DIRECTION LAYER ━━━━━━━━━━━━━━━━━━━━━")
+    brief       = engine_15_creative_director(idea, angle, audience, script)
+    director    = engine_16_director(script, brief)
+    shots       = engine_17_shot_planning(director, script)
+    visual_plan = engine_18_visual_planning(shots, script, idea)
+    asset_plan  = engine_19_asset_planning(visual_plan, idea)
+
+    # ── PRODUCTION — skip engine_20 perf clips in test, 1 PAI B-roll only ────
+    log.info("\n━━━━━━━━━━━━━━━━━━━━ PRODUCTION LAYER ━━━━━━━━━━━━━━━━━━━━")
+    log.info("  [20] NAC Performance Engine — SKIPPED in test mode (saves ~12 min PAI)")
+    nac_perf_clips = []
+    _              = engine_21_student_performance()
+    # Only generate char-ref B-roll clip (no extra B-roll to save credits)
+    pai_clips      = engine_22_ai_visual_pai(asset_plan, idea, brief)
+    chart_data     = engine_23_dashboard(idea)
+    motion_clips   = engine_24_motion_graphics(script, idea, brief, chart_data)
+    chart_vfx      = engine_25_vfx(motion_clips["TradingChart"])
+    sfx            = engine_26_sfx(brief, idea)
+    music_path     = engine_27_music(brief)
+
+    # ── POST PRODUCTION ───────────────────────────────────────────────────────
+    log.info("\n━━━━━━━━━━━━━━━━━━━ POST PRODUCTION ━━━━━━━━━━━━━━━━━━━━━━")
+    narration    = _generate_narration(script.get("full_narration", micro_story))
+    timeline     = engine_28_timeline(motion_clips, None, chart_vfx, pai_clips, narration,
+                                      nac_perf_clips=nac_perf_clips, fmt="short")
+    camera       = engine_29_camera_motion(timeline, brief)
+    captioned    = engine_30_caption(camera, script, brief)
+    transitioned = engine_31_transition(captioned)
+    graded       = engine_32_color_grade(transitioned)
+    outro_video, outro_audio = engine_32b_outro(script)
+    final        = engine_33_render(graded, narration, music_path, sfx, script, outro_video, outro_audio)
+
+    # ── PUBLISHING — SKIPPED in test, run cover + SEO only ───────────────────
+    log.info("\n━━━━━━━━━━━━━━━━━━━━ PUBLISHING LAYER (test — no upload) ━━")
+    cover    = engine_34_cover(script, idea, research, pai_clips=pai_clips, chart_video=chart_vfx)
+    seo      = engine_35_title_seo(script, idea, research)
+    log.info(f"  [TEST] Skipping engine_36 publish — file at {final}")
+    analytics = engine_37_analytics(None)
+    lessons   = engine_38_learning(None, script, idea)
+
+    elapsed = time.time() - t0
+    log.info("\n" + "=" * 70)
+    log.info(f"TEST RUN COMPLETE — {elapsed:.1f}s")
+    log.info(f"  Video:  {final}")
+    log.info(f"  Size:   {final.stat().st_size/1e6:.1f} MB")
+    log.info(f"  Cover:  {cover}")
+    log.info(f"  Title:  {seo.get('title','')}")
+    log.info(f"  Idea:   {brief.get('structural_idea','?')} | {brief.get('visual_style','')[:60]}")
+    log.info(f"  SFX:    {brief.get('sfx_profile','?')} | Music: {brief.get('music_mood','?')}")
+    log.info(f"  Camera: {brief.get('camera_style','?')}")
+    log.info("=" * 70)
+    return final
+
+
 if __name__ == "__main__":
     import sys
     if "--long" in sys.argv:
         main_long()
+    elif "--test" in sys.argv:
+        main_test()
     else:
         main()
