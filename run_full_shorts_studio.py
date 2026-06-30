@@ -2832,11 +2832,392 @@ def main_test() -> Path:
     return final
 
 
+def _mix_translated(video: Path, narration: Path, music_path, sfx_map: dict,
+                    out: Path, dur: float = 30.0) -> Path:
+    """Audio mix for translated video: same SFX plan as engine_33, custom output path."""
+    if out.exists():
+        log.info(f"  [cache] {out.name}"); return out
+
+    _SFX_PLAN = [
+        ("keyboard_typing", 0.00, 0.38), ("chart_alert", 0.04, 0.55),
+        ("ping",            0.06, 0.48), ("reveal",      0.14, 0.42),
+        ("scroll",          0.19, 0.32), ("mouse_click", 0.22, 0.50),
+        ("double_click",    0.27, 0.52), ("trade_execute",0.30, 0.62),
+        ("whoosh",          0.36, 0.38), ("keyboard_typing_short",0.42, 0.30),
+        ("screen_tap",      0.46, 0.40), ("chart_move",  0.55, 0.50),
+        ("scroll",          0.60, 0.28), ("keyboard_typing_short",0.63, 0.26),
+        ("data_reveal",     0.68, 0.45), ("screen_tap",  0.72, 0.38),
+        ("notification",    0.78, 0.52), ("mouse_click", 0.84, 0.42),
+        ("double_click",    0.87, 0.48), ("trade_execute",0.90, 0.60),
+        ("chart_alert",     0.94, 0.38),
+    ]
+    sfx_inputs, sfx_filters, sfx_streams = [], [], []
+    idx = 2  # 0=video, 1=narration, 2+=sfx
+    for sfx_name, frac, vol in sorted(_SFX_PLAN, key=lambda x: x[1]):
+        t_start = frac * dur
+        p = sfx_map.get(sfx_name)
+        if t_start >= dur - 0.3 or not p or not p.exists():
+            continue
+        sfx_inputs  += ["-i", str(p)]
+        sfx_filters.append(f"[{idx}:a]adelay={int(t_start*1000)}|{int(t_start*1000)},volume={vol:.2f}[s{idx}]")
+        sfx_streams.append(f"[s{idx}]")
+        idx += 1
+
+    inputs = ["-i", str(video), "-i", str(narration)] + sfx_inputs
+    if music_path and music_path.exists():
+        inputs += ["-stream_loop", "-1", "-i", str(music_path)]
+        sfx_filters.append(f"[{idx}:a]volume=0.12,afade=t=in:st=0:d=2,afade=t=out:st={max(0,dur-3):.1f}:d=3[bgm]")
+        sfx_streams.append("[bgm]")
+
+    mix_in = "[nar]" + "".join(sfx_streams)
+    n_mix  = 1 + len(sfx_streams)
+    fc = (
+        "[1:a]volume=2.5[nar];"
+        + ";".join(sfx_filters)
+        + (";"+";".join(sfx_filters) and "")  # already added
+        + f";{mix_in}amix=inputs={n_mix}:duration=longest:normalize=0[aout]"
+    )
+    # rebuild clean
+    fc_parts = ["[1:a]volume=2.5[nar]"] + sfx_filters + [f"{mix_in}amix=inputs={n_mix}:duration=longest:normalize=0[aout]"]
+    r = _run(
+        ["ffmpeg", "-y"] + inputs + [
+            "-filter_complex", ";".join(fc_parts),
+            "-map", "0:v", "-map", "[aout]",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+            "-t", str(dur), str(out),
+        ], check=False, timeout=120,
+    )
+    if not out.exists() or out.stat().st_size < 1000:
+        log.warning(f"  mix_translated failed: {r.stderr[-200:].decode(errors='replace')}")
+        import shutil; shutil.copy(video, out)
+    return out
+
+
+def _caption_translated(video: Path, narration_text: str, font_paths: list, out: Path) -> Path:
+    """Add captions in any language using RGBA segment overlay (no YUV corruption)."""
+    if out.exists():
+        log.info(f"  [cache] {out.name}"); return out
+    import shutil
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        shutil.copy(video, out); return out
+
+    font = None
+    for fp in font_paths:
+        try:
+            font = ImageFont.truetype(fp, 46); break
+        except Exception:
+            pass
+    if font is None:
+        font = ImageFont.load_default()
+
+    W, H   = 1080, 1920
+    words  = narration_text.split()
+    dur    = _duration(video)
+    if not words or dur < 1:
+        shutil.copy(video, out); return out
+
+    wps        = len(words) / dur
+    chunk_size = 5
+    cap_dir    = out.parent / f"cap_frames_{out.stem}"
+    cap_dir.mkdir(exist_ok=True)
+
+    chunks, i = [], 0
+    while i < len(words):
+        grp     = words[i:i + chunk_size]
+        t_start = i / wps
+        t_end   = min((i + len(grp)) / wps, dur)
+        text    = " ".join(grp)
+        img     = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        draw    = ImageDraw.Draw(img)
+        try:
+            bbox = draw.textbbox((0, 0), text, font=font)
+            tw, th = bbox[2]-bbox[0], bbox[3]-bbox[1]
+        except AttributeError:
+            tw, th = draw.textsize(text, font=font)
+        x = (W - tw) // 2
+        y = int(H * 0.78) - th // 2
+        for dx, dy in [(-3,0),(3,0),(0,-3),(0,3),(-2,-2),(2,-2),(-2,2),(2,2)]:
+            draw.text((x+dx, y+dy), text, font=font, fill=(0,0,0,220))
+        draw.text((x, y), text, font=font, fill=(255,255,255,255))
+        img_path = cap_dir / f"cap_{i:05d}.png"
+        img.save(str(img_path))
+        chunks.append((img_path, t_start, t_end))
+        i += chunk_size
+
+    seg_clips, cursor, seg_idx = [], 0.0, 0
+
+    def _seg(t_s, t_e, png=None):
+        nonlocal seg_idx
+        d = t_e - t_s
+        if d < 0.05: return
+        seg_out = cap_dir / f"seg_{seg_idx:03d}.mp4"
+        seg_idx += 1
+        if seg_out.exists():
+            seg_clips.append(seg_out); return
+        if png and png.exists():
+            _run(["ffmpeg", "-y",
+                  "-ss", f"{t_s:.3f}", "-t", f"{d:.3f}", "-i", str(video),
+                  "-i", str(png),
+                  "-filter_complex", "[0:v][1:v]overlay=0:0:format=auto[v]",
+                  "-map", "[v]", "-an",
+                  "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", str(seg_out)],
+                 check=False, timeout=60)
+        else:
+            _run(["ffmpeg", "-y",
+                  "-ss", f"{t_s:.3f}", "-t", f"{d:.3f}", "-i", str(video),
+                  "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", "-an", str(seg_out)],
+                 check=False, timeout=60)
+        if seg_out.exists() and seg_out.stat().st_size > 500:
+            seg_clips.append(seg_out)
+
+    for img_path, t_start, t_end in chunks:
+        _seg(cursor, t_start, None)
+        _seg(t_start, t_end, img_path)
+        cursor = t_end
+    _seg(cursor, dur, None)
+
+    if not seg_clips:
+        shutil.copy(video, out); return out
+
+    concat_txt = cap_dir / "concat.txt"
+    concat_txt.write_text("\n".join(f"file '{p}'" for p in seg_clips))
+    cap_vid = cap_dir / "cap_video.mp4"
+    _run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_txt),
+          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", str(cap_vid)],
+         check=False, timeout=180)
+    if not cap_vid.exists() or cap_vid.stat().st_size < 1000:
+        shutil.copy(video, out); return out
+
+    _run(["ffmpeg", "-y", "-i", str(cap_vid), "-i", str(video),
+          "-map", "0:v", "-map", "1:a?", "-c:v", "copy", "-c:a", "copy", str(out)],
+         check=False, timeout=60)
+    if not out.exists() or out.stat().st_size < 1000:
+        shutil.copy(video, out)
+    return out
+
+
+def main_upload_multilang():
+    """Translate existing final.mp4 to HI/TE and upload all 3 to YT in parallel."""
+    import threading
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaFileUpload
+    from google.oauth2.credentials import Credentials
+
+    log.info("=" * 70)
+    log.info("NacArtha AI Studio — MULTILANG UPLOAD (EN + HI + TE)")
+    log.info("=" * 70)
+
+    # Read EN narration from captions.srt
+    srt_path = OUT / "captions.srt"
+    if not srt_path.exists():
+        raise FileNotFoundError("captions.srt not found — run --test first")
+    en_narration = " ".join(
+        l.strip() for l in srt_path.read_text().splitlines()
+        if l.strip() and not l.strip().isdigit() and "-->" not in l
+    )
+    log.info(f"  EN: {en_narration[:80]}...")
+
+    final_en = OUT / "final.mp4"
+    graded   = OUT / "graded.mp4"
+    cover    = OUT / "cover.jpg"
+    if not final_en.exists():
+        raise FileNotFoundError("final.mp4 not found — run --test first")
+    if not graded.exists():
+        raise FileNotFoundError("graded.mp4 not found — run --test first")
+
+    music_files = list(MUSIC_DIR.glob("*.mp3"))
+    music_path  = music_files[0] if music_files else None
+
+    sfx_map = {k: (OUT / v) for k, v in {
+        "ping": "ping.mp3", "reveal": "reveal.mp3", "whoosh": "whoosh.mp3",
+        "notification": "notif.mp3", "chart_move": "chart_move.mp3",
+        "keyboard_typing": "keyboard_typing.mp3",
+        "keyboard_typing_short": "keyboard_short.mp3",
+        "mouse_click": "mouse_click.mp3", "double_click": "double_click.mp3",
+        "trade_execute": "trade_execute.mp3", "data_reveal": "data_reveal.mp3",
+        "chart_alert": "chart_alert.mp3", "scroll": "scroll.mp3",
+        "screen_tap": "screen_tap.mp3",
+    }.items()}
+
+    # Translate narration + SEO to HI and TE
+    log.info("  Translating to Hindi and Telugu...")
+    tr = _json_claude(
+        "Translate this trading/finance YouTube Short narration into natural Hindi AND Telugu. "
+        "Keep trading terms (TSLA, short, P&L) in English. Keep energy and emotion. "
+        "Also write SEO YouTube titles + descriptions for each language. "
+        "Return ONLY valid JSON: "
+        "{\"hi_narration\":\"...\",\"te_narration\":\"...\","
+        "\"en_title\":\"...\",\"en_description\":\"...\","
+        "\"hi_title\":\"...\",\"hi_description\":\"...\","
+        "\"te_title\":\"...\",\"te_description\":\"...\","
+        "\"tags\":[\"tag1\",\"tag2\"]}",
+        f"Narration: {en_narration}\nChannel: NacArtha AI — Indian retail investor, TSLA short trade confession",
+        max_tokens=2000,
+    )
+    log.info(f"  HI title: {tr.get('hi_title','')[:60]}")
+    log.info(f"  TE title: {tr.get('te_title','')[:60]}")
+
+    dur = _duration(graded)
+
+    LANGS = [
+        {
+            "code": "en",
+            "narration_text": en_narration,
+            "narration_file": OUT / "narration.mp3",
+            "seo": {"title": tr.get("en_title","NacArtha AI Short #Shorts"),
+                    "description": tr.get("en_description",""),
+                    "tags": tr.get("tags",[])},
+            "refresh_env": "YOUTUBE_REFRESH_TOKEN_EN",
+            "font_paths": [
+                "/System/Library/Fonts/Helvetica.ttc",
+                "/Library/Fonts/Arial Bold.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            ],
+            "final": final_en,
+            "prebuilt": True,
+        },
+        {
+            "code": "hi",
+            "narration_text": tr.get("hi_narration",""),
+            "narration_file": OUT / "narration_hi.mp3",
+            "seo": {"title": tr.get("hi_title",""),
+                    "description": tr.get("hi_description",""),
+                    "tags": tr.get("tags",[])},
+            "refresh_env": "YOUTUBE_REFRESH_TOKEN_HI",
+            "font_paths": [
+                "/System/Library/Fonts/Supplemental/Devanagari Sangam MN.ttc",
+                "/System/Library/Fonts/Supplemental/ITFDevanagari.ttc",
+                "/Library/Fonts/Arial Unicode.ttf",
+                "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Bold.ttf",
+            ],
+            "final": OUT / "final_hi.mp4",
+            "prebuilt": False,
+        },
+        {
+            "code": "te",
+            "narration_text": tr.get("te_narration",""),
+            "narration_file": OUT / "narration_te.mp3",
+            "seo": {"title": tr.get("te_title",""),
+                    "description": tr.get("te_description",""),
+                    "tags": tr.get("tags",[])},
+            "refresh_env": "YOUTUBE_REFRESH_TOKEN_TE",
+            "font_paths": [],
+            "final": OUT / "final_te.mp4",
+            "prebuilt": False,
+            "skip_captions": True,  # Telugu script rendering unreliable — voice-only translation
+        },
+    ]
+
+    # Prepare HI and TE videos (sequential — audio gen + render)
+    for lang in LANGS:
+        if lang["prebuilt"]:
+            continue
+        code = lang["code"]
+        text = lang["narration_text"]
+        if not text:
+            log.warning(f"  [{code.upper()}] no translation — skipping")
+            lang["final"] = None; continue
+
+        # Generate translated narration audio
+        nar_file = lang["narration_file"]
+        if not nar_file.exists():
+            log.info(f"  [{code.upper()}] ElevenLabs TTS...")
+            api_key  = os.environ["ELEVENLABS_API_KEY"]
+            voice_id = os.environ.get(f"ELEVENLABS_VOICE_ID_{code.upper()}",
+                       os.environ.get("ELEVENLABS_VOICE_ID_NAC",
+                       os.environ.get("ELEVENLABS_VOICE_ID_EN", "pNInz6obpgDQGcFmaJgB")))
+            payload  = json.dumps({"text": text, "model_id": "eleven_multilingual_v2",
+                                   "voice_settings": {"stability": 0.42, "similarity_boost": 0.82}}).encode()
+            req = urllib.request.Request(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+                data=payload,
+                headers={"xi-api-key": api_key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                nar_file.write_bytes(resp.read())
+            log.info(f"  [{code.upper()}] audio: {nar_file.stat().st_size//1024} KB")
+
+        # Mix audio + video
+        mixed = OUT / f"mixed_{code}.mp4"
+        _mix_translated(graded, nar_file, music_path, sfx_map, mixed, dur=dur)
+
+        # Add captions in target language (skip if script rendering is unreliable)
+        if lang.get("skip_captions"):
+            import shutil as _shutil
+            _shutil.copy(mixed, lang["final"])
+            log.info(f"  [{code.upper()}] ready (voice-only, no captions): {lang['final']}")
+        else:
+            _caption_translated(mixed, text, lang["font_paths"], lang["final"])
+            log.info(f"  [{code.upper()}] ready: {lang['final']}")
+
+    # Upload all 3 in parallel
+    results, lock = {}, threading.Lock()
+
+    def _upload(lang_cfg):
+        code = lang_cfg["code"]
+        vpath = lang_cfg.get("final")
+        if not vpath or not Path(vpath).exists():
+            log.warning(f"  [{code.upper()}] video missing — skip"); return
+        log.info(f"  [{code.upper()}] uploading...")
+        try:
+            creds = Credentials(
+                token=None,
+                refresh_token= os.environ[lang_cfg["refresh_env"]],
+                client_id=     os.environ["YOUTUBE_CLIENT_ID"],
+                client_secret= os.environ["YOUTUBE_CLIENT_SECRET"],
+                token_uri=     "https://oauth2.googleapis.com/token",
+            )
+            yt    = build("youtube", "v3", credentials=creds)
+            seo   = lang_cfg["seo"]
+            title = seo.get("title", f"NacArtha #{code.upper()} #Shorts")[:100]
+            req   = yt.videos().insert(
+                part="snippet,status",
+                body={"snippet": {"title": title,
+                                  "description": seo.get("description","")[:5000],
+                                  "tags": seo.get("tags",[])[:500],
+                                  "categoryId": "27"},
+                      "status": {"privacyStatus": "public"}},
+                media_body=MediaFileUpload(str(vpath), chunksize=-1, resumable=True),
+            )
+            resp = None
+            while resp is None:
+                status, resp = req.next_chunk()
+                if status:
+                    log.info(f"  [{code.upper()}] {int(status.progress()*100)}%")
+            url = f"https://youtu.be/{resp['id']}"
+            log.info(f"  [{code.upper()}] → {url}")
+            try:
+                if cover.exists():
+                    yt.thumbnails().set(videoId=resp["id"],
+                                        media_body=MediaFileUpload(str(cover))).execute()
+            except Exception as te:
+                log.warning(f"  [{code.upper()}] thumbnail: {te}")
+            with lock:
+                results[code] = url
+        except Exception as e:
+            log.error(f"  [{code.upper()}] upload failed: {e}")
+
+    threads = [threading.Thread(target=_upload, args=(lang,), daemon=True) for lang in LANGS]
+    for t in threads: t.start()
+    for t in threads: t.join()
+
+    log.info("\n" + "=" * 70)
+    log.info("MULTILANG UPLOAD COMPLETE")
+    for code, url in sorted(results.items()):
+        log.info(f"  {code.upper()}: {url}")
+    log.info("=" * 70)
+    return results
+
+
 if __name__ == "__main__":
     import sys
     if "--long" in sys.argv:
         main_long()
     elif "--test" in sys.argv:
         main_test()
+    elif "--upload-multilang" in sys.argv:
+        main_upload_multilang()
     else:
         main()
