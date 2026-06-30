@@ -1092,22 +1092,17 @@ def engine_24_motion_graphics(script: Dict, idea: ShortIdea, brief: Dict, chart_
     hook_program = brief.get("hook_program", {})
     stat_program = brief.get("stat_program", {})
 
-    # 1. Hook card (3s) — use DynamicScene if AI provided program, else preset
-    if hook_program.get("layers"):
-        log.info(f"  → Using DynamicScene for hook ({len(hook_program['layers'])} layers)")
-        outputs["HookCard"] = _remotion_render("DynamicScene", "hook.mp4", 90, {
-            "program": hook_program,
-        })
-    else:
-        log.info(f"  → Using preset {hook_comp} for hook")
-        outputs["HookCard"] = _remotion_render(hook_comp, "hook.mp4", 90, {
-            "text":      script.get("hook_text", "THE AI KNEW"),
-            "subtext":   script.get("hook_subtext", ""),
-            "fontSize":  font_size,
-            "ticker":    idea.ticker,
-            "direction": idea.direction.upper(),
-            **vis,
-        })
+    # 1. Hook card (3s) — always use pre-built composition (DynamicScene too slow for hook)
+    # DynamicScene has 10+ layers with blur/grain/ticker = 5s/frame × 90 frames = too long
+    log.info(f"  → Using preset {hook_comp} for hook (AI-directed color+style)")
+    outputs["HookCard"] = _remotion_render(hook_comp, "hook.mp4", 90, {
+        "text":      script.get("hook_text", "THE AI KNEW"),
+        "subtext":   script.get("hook_subtext", ""),
+        "fontSize":  font_size,
+        "ticker":    idea.ticker,
+        "direction": idea.direction.upper(),
+        **vis,
+    })
 
     # 2. Trading chart (35s) — always rendered, themed with AI colors
     chart_props = dict(chart_data)
@@ -1118,9 +1113,10 @@ def engine_24_motion_graphics(script: Dict, idea: ShortIdea, brief: Dict, chart_
     chart_props["vignette"]        = vignette
     outputs["TradingChart"] = _remotion_render("TradingChart", "trading_chart.mp4", 1050, chart_props)
 
-    # 3. Stat card (6s) — use DynamicScene if AI provided program, else preset
-    if stat_program.get("layers"):
-        log.info(f"  → Using DynamicStat for stat ({len(stat_program['layers'])} layers)")
+    # 3. Stat card (6s) — use DynamicStat only if ≤6 layers (more = too slow)
+    stat_layers = stat_program.get("layers", [])
+    if stat_layers and len(stat_layers) <= 6:
+        log.info(f"  → Using DynamicStat for stat ({len(stat_layers)} layers)")
         outputs["StatCard"] = _remotion_render("DynamicStat", "stat.mp4", 180, {
             "program": stat_program,
         })
