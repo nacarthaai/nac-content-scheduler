@@ -1255,9 +1255,9 @@ def engine_26_sfx(brief: Dict = None, idea=None) -> Dict[str, Path]:
             f"aevalsrc='0.28*sin(2*PI*(280+1100*t/0.75)*t)*exp(-0.9*t)+0.14*sin(2*PI*(140+550*t/0.75)*t)*exp(-1.3*t)':s=44100:d=0.75",
             "data_reveal.mp3"
         ),
-        # screen_tap — sharp tap on glass/touchscreen
+        # screen_tap — sharp tap on glass/touchscreen (no random(), min 0.1s for valid mp3)
         "screen_tap": (
-            f"aevalsrc='0.45*(random(0)-0.5)*exp(-180*t)+0.25*sin(2*PI*1600*t)*exp(-120*t)':s=44100:d=0.06",
+            f"aevalsrc='0.45*sin(2*PI*1600*t)*exp(-120*t)+0.2*sin(2*PI*3200*t)*exp(-200*t)':s=44100:d=0.12",
             "screen_tap.mp3"
         ),
         # chart_alert — AI signal detected electronic beep pair
@@ -1272,26 +1272,32 @@ def engine_26_sfx(brief: Dict = None, idea=None) -> Dict[str, Path]:
         ),
     }
 
-    sfx = {}
-    # Generate profile sounds
-    for name, (lavfi_src, fname) in profile.items():
-        out = OUT / fname
-        if not out.exists():
+    def _gen_sfx(lavfi_src: str, out: Path):
+        if out.exists() and out.stat().st_size > 500:
+            return
+        out.unlink(missing_ok=True)
+        r = subprocess.run(
+            ["ffmpeg", "-y", "-f", "lavfi", "-i", lavfi_src, "-ar", "44100", "-ac", "1", str(out)],
+            capture_output=True, timeout=15,
+        )
+        if r.returncode != 0 or not out.exists() or out.stat().st_size < 500:
+            log.warning(f"  SFX gen failed for {out.name} — using silence fallback")
+            out.unlink(missing_ok=True)
             subprocess.run(
-                ["ffmpeg", "-y", "-f", "lavfi", "-i", lavfi_src, "-ar", "44100", str(out)],
+                ["ffmpeg", "-y", "-f", "lavfi", "-i", "aevalsrc=0:s=44100:d=0.1", "-ac", "1", str(out)],
                 capture_output=True, timeout=10,
             )
+
+    sfx = {}
+    for name, (lavfi_src, fname) in profile.items():
+        out = OUT / fname
+        _gen_sfx(lavfi_src, out)
         sfx[name] = out
         log.info(f"  → {fname} [{profile_key}]")
 
-    # Generate action sounds (same across all profiles)
     for name, (lavfi_src, fname) in _ACTION_SOUNDS.items():
         out = OUT / fname
-        if not out.exists():
-            subprocess.run(
-                ["ffmpeg", "-y", "-f", "lavfi", "-i", lavfi_src, "-ar", "44100", str(out)],
-                capture_output=True, timeout=10,
-            )
+        _gen_sfx(lavfi_src, out)
         sfx[name] = out
         log.info(f"  → {fname} [action]")
 
@@ -2621,6 +2627,10 @@ def main_test() -> Path:
         "timeline_raw.mp4", "camera.mp4", "chart_vfx.mp4",
         "captioned.mp4", "transitioned.mp4", "graded.mp4",
         "body.mp4", "final.mp4", "narration.mp3", "chart_move.mp3",
+        # SFX — regenerate each run so corrupted files don't persist
+        "screen_tap.mp3", "keyboard_typing.mp3", "keyboard_short.mp3",
+        "mouse_click.mp3", "double_click.mp3", "trade_execute.mp3",
+        "data_reveal.mp3", "chart_alert.mp3", "scroll.mp3",
     ]
     for _f in _stale_t:
         _p = OUT / _f
