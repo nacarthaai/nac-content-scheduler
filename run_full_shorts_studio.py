@@ -1577,7 +1577,7 @@ def _generate_narration(narration_text: str) -> Path:
 
 
 def engine_30_caption(video: Path, script: Dict, brief: Dict = None) -> Path:
-    log.info("[30] Caption Engine — Pillow PNG overlay (no libfreetype required)")
+    log.info("[30] Caption Engine — Pillow screen-blend (black=transparent, no alpha needed)")
     out = OUT / "captioned.mp4"
     if out.exists():
         log.info("  [cache] captioned.mp4")
@@ -1622,21 +1622,22 @@ def engine_30_caption(video: Path, script: Dict, brief: Dict = None) -> Path:
 
     W, H  = 1080, 1920
     wps   = len(words) / dur
-    chunk = 5
+    chunk_size = 5
 
-    # Build (image_path, t_start, t_end, is_accent) list
+    # Build caption PNGs on pure BLACK background — black pixels become transparent
+    # via ffmpeg "screen" blend (result = a+b - a*b; black b=0 → result=a unchanged)
     cap_dir = OUT / "cap_frames"
     cap_dir.mkdir(exist_ok=True)
     chunks = []
     i = 0
     while i < len(words):
-        grp     = words[i:i + chunk]
+        grp     = words[i:i + chunk_size]
         t_start = i / wps
         t_end   = min((i + len(grp)) / wps, dur)
-        is_accent = (i // chunk) % 3 == 2
+        is_accent = (i // chunk_size) % 3 == 2
         text    = " ".join(grp)
 
-        img  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        img  = Image.new("RGB", (W, H), (0, 0, 0))
         draw = ImageDraw.Draw(img)
         try:
             bbox = draw.textbbox((0, 0), text, font=font)
@@ -1647,24 +1648,23 @@ def engine_30_caption(video: Path, script: Dict, brief: Dict = None) -> Path:
         x = (W - tw) // 2
         y = int(H * 0.78) - th // 2
 
-        color = accent_rgb if is_accent else (255, 255, 255)
+        # Glow: slightly bright halo so text pops even on bright backgrounds
+        glow_color = tuple(min(255, c + 80) for c in accent_rgb) if is_accent else (180, 180, 180)
+        for dx, dy in [(-4,0),(4,0),(0,-4),(0,4),(-3,-3),(3,-3),(-3,3),(3,3)]:
+            draw.text((x + dx, y + dy), text, font=font, fill=glow_color)
 
-        # Black outline
-        for dx, dy in [(-3,0),(3,0),(0,-3),(0,3),(-2,-2),(2,-2),(-2,2),(2,2)]:
-            draw.text((x + dx, y + dy), text, font=font, fill=(0, 0, 0, 210))
-        draw.text((x, y), text, font=font, fill=(*color, 255))
+        # Main text: white or accent
+        color = accent_rgb if is_accent else (255, 255, 255)
+        draw.text((x, y), text, font=font, fill=color)
 
         img_path = cap_dir / f"cap_{i:05d}.png"
         img.save(str(img_path))
         chunks.append((img_path, t_start, t_end))
-        i += chunk
+        i += chunk_size
 
-    # Build a single caption-track video via concat, then overlay once
-    # Step 1: build gap→text→gap segments covering the full duration
-    fps   = 30
-    blank = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    # Build blank (pure black) for gaps
     blank_path = cap_dir / "blank.png"
-    blank.save(str(blank_path))
+    Image.new("RGB", (W, H), (0, 0, 0)).save(str(blank_path))
 
     # Segments: (png_path, duration_seconds)
     segments = []
@@ -1677,7 +1677,7 @@ def engine_30_caption(video: Path, script: Dict, brief: Dict = None) -> Path:
     if cursor < dur - 0.05:
         segments.append((blank_path, dur - cursor))
 
-    # Step 2: build caption track video via ffmpeg concat
+    # Build caption track: yuv420p (no alpha needed — black will screen-blend away)
     cap_track = OUT / "cap_track.mp4"
     seg_inputs, concat_parts = [], []
     for si, (p, d) in enumerate(segments):
@@ -1685,31 +1685,33 @@ def engine_30_caption(video: Path, script: Dict, brief: Dict = None) -> Path:
         concat_parts.append(f"[{si}:v]")
     n = len(segments)
     fc_concat = "".join(concat_parts) + f"concat=n={n}:v=1:a=0[capv]"
-    _run(
+    r_track = _run(
         ["ffmpeg", "-y"] + seg_inputs + [
             "-filter_complex", fc_concat,
             "-map", "[capv]",
-            "-c:v", "libx264", "-pix_fmt", "yuva420p",
-            "-r", str(fps), str(cap_track),
+            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-r", "30", str(cap_track),
         ],
         check=False, timeout=120,
     )
+    if not cap_track.exists() or cap_track.stat().st_size < 1000:
+        log.warning(f"  cap_track build failed: {r_track.stderr[-200:]}")
+        shutil.copy(video, out); return out
 
-    # Step 3: single overlay of caption track on video
-    if cap_track.exists() and cap_track.stat().st_size > 1000:
-        r = _run(
-            ["ffmpeg", "-y", "-i", str(video), "-i", str(cap_track),
-             "-filter_complex", "[0:v][1:v]overlay=0:0[v]",
-             "-map", "[v]", "-map", "0:a",
-             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "copy",
-             str(out)],
-            check=False, timeout=300,
-        )
+    # Screen blend: black → transparent, white/color → additive bright text
+    r = _run(
+        ["ffmpeg", "-y", "-i", str(video), "-i", str(cap_track),
+         "-filter_complex", "[0:v][1:v]blend=all_mode=screen[v]",
+         "-map", "[v]", "-map", "0:a?",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "copy",
+         str(out)],
+        check=False, timeout=300,
+    )
     if not out.exists() or out.stat().st_size < 1000:
-        log.warning("  Caption overlay failed — using uncaptioned video")
+        log.warning(f"  Screen blend failed: {r.stderr[-200:]}")
         shutil.copy(video, out)
     else:
-        log.info(f"  → captioned.mp4 ({len(chunks)} blocks, Pillow+concat overlay)")
+        log.info(f"  → captioned.mp4 ({len(chunks)} blocks, screen-blend)")
     return out
 
 
