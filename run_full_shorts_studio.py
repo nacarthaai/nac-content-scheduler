@@ -405,139 +405,118 @@ def engine_14_conversation(script: Dict, idea: ShortIdea) -> Dict:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def engine_15_creative_director(idea: ShortIdea, angle: str, audience: Dict, script: Dict) -> Dict:
-    log.info("[15] Creative Director Engine — generating unique visual program")
+    log.info("[15] Creative Director — Hollywood Visual Director: per-sentence shot list")
 
-    is_short = idea.direction.upper() == "SHORT"
-    is_loss  = idea.pnl < 0
+    is_short  = idea.direction.upper() == "SHORT"
     dir_color = "#ef4444" if is_short else "#22c55e"
     bg_dark   = "#180000" if is_short else "#001408"
+    narration = script.get("full_narration", "")
+    hook_text = script.get("hook_text", "")
 
     result = _json_claude(
-        f"""You are the Creative Director, Visual Programmer, AND Cinematographer for NacArtha AI trading Shorts.
+        f"""You are an award-winning Hollywood Creative Director, Cinematographer, and Motion Designer for NacArtha AI Trading.
 
-Each video MUST feel completely different — different structure, different energy, different PAI footage, different story.
+Your job is NOT to summarize the script. Your job is to DIRECT a SHOT LIST where every 1-3 seconds is a DIFFERENT visual scene.
+Think Netflix Documentary. Think MagnatesMedia. Think Bloomberg Originals.
 
-━━━ PAI CLIP DIRECTION (your most important job) ━━━
-You control the actual footage that goes in the video via pai_clip_prompts.
-NAC is an Indian male analyst with glasses — this is the character PAI will use for char_ref.
+━━━ DIRECTORIAL RULES ━━━
+• Every 1-3 seconds: camera changes OR scene changes OR text changes
+• NEVER put the same thing on screen for more than 3 seconds
+• Each sentence of narration = 2-4 distinct visual shots
+• Think in LAYERS: every scene should feel alive, not like a slide
+• Text must be SHORT — max 7 words per shot, make each word count
+• Colors must MATCH the emotion: red/dark for loss, green for win, amber for wisdom, cyan for analysis
 
-For char_ref_clip (8s, 9:16 vertical, NAC character MUST appear):
-- VARY the ACTION: pointing at screen | sitting leaned in | turning to camera | head down analyzing | arms crossed watching | walking between screens | on phone looking at charts | jaw drop looking at chart
-- VARY the LIGHTING: blood-red emergency glow | cold clinical blue monitor light | warm amber late-night lamp | purple neon reflections | strobing alert lights | single bright monitor backlight | green profit glow
-- VARY the CAMERA: medium shot | extreme close-up face lit by screens | over-shoulder at monitors | wide establishing trading room | Dutch angle tense | low angle looking up at screens
-- VARY the ENERGY (match the story): alarmed and urgent | calm and methodical | disappointed slumping | confident and decisive | shocked frozen staring | excited leaning forward | exhausted post-trade
-- ALWAYS end with: "Indian male analyst with glasses, 9:16 vertical cinematic, 4K quality"
+━━━ AVAILABLE REMOTION COMPOSITIONS ━━━
+Each composition renders in 1-4 seconds. Choose the right one for each story beat:
 
-For broll_clip (6s, 9:16 vertical, ZERO people — empty environment):
-- VARY the SUBJECT: single monitor close-up | keyboard macro | wide empty trading floor | desk bird's-eye | glass desk reflection | monitor wall row | coffee mug + scattered papers + screen | window with city view + screen reflection
-- VARY chart content: blood-red crash in freefall | explosive green surge | volatile whipsawing | consolidation breaking down | gap down opening | sustained rally
-- VARY color treatment: pure red glow | cold blue tech | amber warm | emergency red strobe | green profit cascade | purple neon
-- ALWAYS include: "no people, no person, no human body parts" — CRITICAL for B-roll
+"FilmCard"    → Cinematic text card, dark film grain. USE FOR: story beats, confessional moments, "here's what happened"
+"TypoSlam"    → Words slam in hard one-by-one. USE FOR: 3-6 word punchy phrases, revelations
+"GlitchHook"  → Glitch effect headline. USE FOR: thriller/urgent opening, shocking moments
+"SplitReveal" → Two-panel left/right split. USE FOR: before/after contrast, AI vs human
+"WordPunch"   → ONE single giant word impact. USE FOR: single-word moments: "SOLD" "LOSS" "WIN" "NOW"
+"NewsFlash"   → Breaking news ticker style. USE FOR: market events, price moves, breaking developments
+"ImpactStat"  → Animated P&L counter. USE FOR: the money moment, profit/loss reveal (auto-fills P&L)
+"WinLoseSlam" → Win/Loss result slam. USE FOR: final trade outcome (auto-fills result)
+"DataReveal"  → Multi-stat data reveal. USE FOR: technical analysis, AI signals, market data
+"TradingChart"→ Animated candlestick chart. USE FOR: price action section (auto-fills chart data)
+"CTACard"     → Follow/subscribe card. ALWAYS the last shot.
+"nac_char"    → Real NAC character footage (PAI). USE SPARINGLY — max 1-2 shots total.
 
-━━━ REMOTION VISUAL PROGRAM ━━━
-You control a layer-based Remotion interpreter. Layers render bottom to top.
+━━━ SHOT ARCHITECTURE FOR {int(script.get('duration_seconds', 55))}s VIDEO ━━━
+Plan exactly this arc:
+[0-4s]   HOOK — nac_char (hook reaction) + GlitchHook/TypoSlam (the shocking statement)
+[4-12s]  SETUP — FilmCard + NewsFlash (context, what happened, why it matters)
+[12-30s] ACTION — TradingChart (price action — must be 8-15s), WordPunch + TypoSlam (key moments)
+[30-45s] REVEAL — ImpactStat or WinLoseSlam (the money moment), DataReveal (analysis)
+[45-55s] LESSON — FilmCard (what I learned), CTACard (follow for more)
 
-AVAILABLE LAYER TYPES:
-- bg:          {{colors: [hex, hex], angle: 0-360}} — gradient background
-- grain:       {{opacity: 0.1-0.6}} — film grain
-- vignette:    {{strength: 0.2-0.8}} — dark edges
-- glow_orb:    {{x: px or "50%", y: px or "center" or "30%", size: 200-800, color: hex, opacity: 0.1-0.3}}
-- text_block:  {{content: str, x: px or "center", y: px or "center" or "30%" or "center+N",
-                 size: 40-140, weight: 400-900, color: hex, last_word_color: hex,
-                 entry: "word_slam"|"slow_fade"|"type_in"|"all_at_once"|"slide_left"|"slide_right",
-                 entry_frame: 0-30, stagger: 5-12, transform: "uppercase"|"none",
-                 letter_spacing: -6 to 8, font: "Arial Black, Impact, sans-serif"|"Georgia, serif"}}
-- ticker_bar:  {{position: "top"|"bottom", content: str, color: hex, text_color: hex, height: 40-60,
-                 label: str (bold badge), scroll_speed: 1-3}}
-- badge:       {{content: str, x: px, y: "center" or "30%", bg_color: hex, text_color: hex,
-                 font_size: 18-36, entry_frame: 0-20, entry: "slide_left"|"scale"}}
-- counter:     {{label: str, target: number (negative for loss), prefix: "$"|"", suffix: "",
-                 color: hex, x: px, y: "center", size: 80-160,
-                 entry_frame: 0, count_frames: 40-70, slam_frame: 50-80}}
-- split_line:  {{orientation: "vertical"|"horizontal", position: "50%"|"40%"|"60%",
-                 color: hex, entry_frame: 0-10, entry: "sweep"|"fade"}}
-- data_grid:   {{rows: [{{label: str, value: str, color: hex}}, ...],
-                 x: px, y: "center", value_size: 50-100, stagger: 12-20, accent_bar_color: hex}}
-- accent_line: {{x: px, y: "bottom-80"|"bottom-120", length: 100-800, color: hex,
-                 direction: "right"|"center", grow_frames: [start_f, end_f]}}
-- scan_bar:    {{color: hex, speed: 0.3-1.0, opacity: 0.04-0.1}}
-- glow_rect:   {{x: px, y: "center", width: px, height: px, color: hex, entry_frame: 0-20}}
-- circle_ring: {{x: "50%", y: "center", size: 200-600, color: hex, pulse: true|false,
-                 expand_frames: 30-60, entry_frame: 0}}
+━━━ COLOR DIRECTION ━━━
+Trade: {idea.ticker} {idea.direction} PnL={idea.pnl}
+Loss/SHORT: accent="#ef4444", bg_start="#180000", bg_end="#000000"
+WIN/LONG:   accent="#22c55e", bg_start="#001408", bg_end="#000000"
+Analysis:   accent="#f59e0b", bg_start="#0a0800", bg_end="#000000"
+Breaking:   accent="#00e5ff", bg_start="#000814", bg_end="#000000"
+NEVER use the same color palette twice in a row. VARY the palette every 2-3 shots.
 
-DESIGN RULES:
-1. Always start with bg + grain + vignette (foundation)
-2. Add 1-2 glow_orbs for atmosphere
-3. The text_block with the hook IS the hero — make it BIG (size 90-130)
-4. Pick a color palette with ONE strong accent: red for loss/short, green for win/long, amber/cyan/purple for neutral
-5. Every video needs a different STRUCTURAL IDEA — pick from:
-   - CONFESSION: slow_fade text, intimate, warm, word by word barely visible at first
-   - THRILLER: multiple text_blocks hitting fast, ticker top+bottom, scan_bar
-   - INVESTIGATION: data_grid with evidence, split_line left-aligned, cold cyan
-   - IMPACT: counter counting to P&L, circle_ring expanding, huge number center
-   - SPLIT: vertical split_line at 45%, badge left panel, text right panel
-   - EDITORIAL: minimal, serif font, letter_spacing 4+, slow_fade, glow_rect border
-   - BROADCAST: ticker_bar top with BREAKING label, text left-aligned, bottom ticker
-   - WORD PUNCH: single word in text_block at size 140, then smaller support text at entry_frame 20
+━━━ PAI CHARACTER DIRECTION ━━━
+NAC is an Indian male analyst with glasses.
+For the hook nac_char shot, generate a specific 4s PAI prompt — vary ACTION + LIGHTING + CAMERA + ENERGY.
 
-Return ONLY valid JSON with NO comments:
+━━━ OUTPUT FORMAT ━━━
+Return ONLY valid JSON. shot_list must have 8-14 shots covering the full video arc.
+
+For "nac_char" shots: {{id, type:"nac_char", purpose:"hook"|"analysis"|"conclusion", duration:3-4, pai_prompt:"..."}}
+For "remotion" shots: {{id, type:"remotion", comp:"<comp_name>", duration:1-4,
+  text:"<max 7 words, specific to THIS story>", sub_text:"<supporting detail or empty>",
+  bg_start:"#hex", bg_end:"#hex", accent:"#hex", grain:0.3-0.6, transition:"WHIP"|"ZOOM"|"CUT"|"FLASH"}}
+
+CRITICAL: text must be SPECIFIC to this trade story (mention {idea.ticker}, specific prices, the actual outcome).
+Never write generic placeholder text like "Market update" or "Trading insight".
+
 {{
-  "visual_style": "<one sentence — what this video feels like>",
-  "structural_idea": "<CONFESSION|THRILLER|INVESTIGATION|IMPACT|SPLIT|EDITORIAL|BROADCAST|WORD_PUNCH>",
-  "music_mood": "<tension|urgency|dread|revelation|intrigue — pick by story energy>",
-  "camera_style": "<confessional|investigative|broadcast|kinetic|cinematic|documentary — drives camera motion engine>",
-  "sfx_profile": "<impact|tension|reveal|dramatic|soft — drives sfx engine>",
+  "visual_style": "<one vivid sentence describing this video's cinematic feel>",
+  "structural_idea": "<CONFESSION|THRILLER|INVESTIGATION|IMPACT|BROADCAST|WORD_PUNCH|EDITORIAL|SPLIT>",
+  "music_mood": "<tension|urgency|dread|revelation|intrigue>",
+  "camera_style": "<confessional|investigative|broadcast|kinetic|cinematic|documentary>",
+  "sfx_profile": "<impact|tension|reveal|dramatic|soft>",
   "nac_performance_prompts": {{
-    "hook_moment": "<4s PAI char-ref clip: NAC's first emotional reaction — shock/urgency/excitement matching story opening. Indian male analyst with glasses, 9:16 vertical, 4K>",
-    "analysis_moment": "<6s PAI char-ref clip: NAC deeply analyzing the trade data — pointing at screen, leaning in, studying chart. Indian male analyst with glasses, 9:16 vertical, 4K>",
-    "conclusion_moment": "<4s PAI char-ref clip: NAC's final reaction to the outcome — satisfied/surprised/contemplative. Indian male analyst with glasses, 9:16 vertical, 4K>"
-  }},
-  "broll_prompts": [
-    "<B-roll prompt 1: establishing environment, no people, no person, 9:16 cinematic>",
-    "<B-roll prompt 2: data detail / chart close-up, no people, no person, 9:16 cinematic>",
-    "<B-roll prompt 3: mood/atmosphere shot, no people, no person, 9:16 cinematic>"
-  ],
-  "pai_clip_prompts": {{
-    "char_ref": "<complete PAI prompt for 8s NAC char-ref clip — vary action+lighting+camera+energy to match this video's story. End with: Indian male analyst with glasses, 9:16 vertical cinematic, 4K quality>",
-    "broll": "<complete PAI prompt for 6s B-roll, empty environment only. Vary subject+angle+color. Must include: no people, no person, no human body parts, 9:16 vertical cinematic, 4K>"
-  }},
-  "hook_program": {{
-    "layers": [ ...layers for 3s hook card... ]
-  }},
-  "stat_program": {{
-    "layers": [ ...layers for 6s stat/P&L card... ]
+    "hook_moment": "<4s PAI prompt: specific NAC reaction. Indian male analyst with glasses, 9:16 vertical, 4K>",
+    "analysis_moment": "<6s PAI prompt: NAC analyzing. Indian male analyst with glasses, 9:16 vertical, 4K>",
+    "conclusion_moment": "<4s PAI prompt: NAC conclusion. Indian male analyst with glasses, 9:16 vertical, 4K>"
   }},
   "remotion_spec": {{
-    "layout": "<for legacy fallback: cinematic_overlay|typo_slam|news_break|investigation|confession|split_tension>",
     "color_primary": "<main accent hex>",
     "bg_gradient_start": "<dark hex>",
     "bg_gradient_end": "<darker hex>",
-    "grain": <0.2-0.5>,
-    "vignette": <0.3-0.7>
-  }}
+    "grain": 0.35,
+    "vignette": 0.6
+  }},
+  "shot_list": [
+    {{"id":1,"type":"nac_char","purpose":"hook","duration":4,"pai_prompt":"..."}},
+    {{"id":2,"type":"remotion","comp":"GlitchHook","duration":2,"text":"...","sub_text":"...","bg_start":"...","bg_end":"...","accent":"...","grain":0.5,"transition":"WHIP"}},
+    ...more shots following the arc...
+    {{"id":N,"type":"remotion","comp":"CTACard","duration":5,"text":"Follow for more","sub_text":"@nacartha","bg_start":"#0a0a0a","bg_end":"#000000","accent":"#f59e0b","grain":0.2,"transition":"FADE"}}
+  ]
 }}""",
         f"Ticker: {idea.ticker} {idea.direction} PnL={idea.pnl}. "
-        f"Hook text: \"{script.get('hook_text','')}\". "
+        f"Hook: \"{hook_text}\". Narration: \"{narration[:400]}\". "
         f"Category: {idea.category}. Angle: {angle}. Tone: {audience.get('tone','direct')}. "
-        f"Direction color hint: {dir_color}. Background hint: {bg_dark}",
-        max_tokens=4000,
+        f"Direction color: {dir_color}. BG hint: {bg_dark}",
+        max_tokens=5000,
     )
+
+    shots = result.get("shot_list", [])
     spec  = result.get("remotion_spec", {})
-    idea_ = result.get("structural_idea", "?")
-    pai_prompts = result.get("pai_clip_prompts", {})
-    nac_perf    = result.get("nac_performance_prompts", {})
-    broll_list  = result.get("broll_prompts", [])
-    log.info(f"  → Idea: {idea_} | Style: {result.get('visual_style','')[:50]}")
+    nac_perf = result.get("nac_performance_prompts", {})
+    log.info(f"  → {result.get('structural_idea','?')} | {result.get('visual_style','')[:60]}")
     log.info(f"  → Music: {result.get('music_mood','?')} | Camera: {result.get('camera_style','?')} | SFX: {result.get('sfx_profile','?')}")
-    log.info(f"  → Color: {spec.get('color_primary','?')} | bg: {spec.get('bg_gradient_start','?')}")
-    hook_layers = result.get("hook_program", {}).get("layers", [])
-    stat_layers = result.get("stat_program", {}).get("layers", [])
-    log.info(f"  → hook_program: {len(hook_layers)} layers | stat_program: {len(stat_layers)} layers")
-    log.info(f"  → nac_perf: {len([v for v in nac_perf.values() if v])} clips | broll: {len(broll_list)} prompts")
-    if pai_prompts.get("char_ref"):
-        log.info(f"  → PAI char_ref: \"{pai_prompts['char_ref'][:80]}...\"")
-    if pai_prompts.get("broll"):
-        log.info(f"  → PAI broll:    \"{pai_prompts['broll'][:80]}...\"")
+    log.info(f"  → shot_list: {len(shots)} shots | accent: {spec.get('color_primary','?')}")
+    for s in shots:
+        if s.get("type") == "nac_char":
+            log.info(f"    [{s['id']:02d}] NAC_CHAR/{s.get('purpose','hook')} {s.get('duration',4)}s")
+        else:
+            log.info(f"    [{s['id']:02d}] {s.get('comp','?'):14s} {s.get('duration',2)}s  \"{s.get('text','')[:40]}\"")
     return result
 
 
@@ -1035,135 +1014,143 @@ def _pick_remotion_theme(idea: ShortIdea) -> dict:
     return theme
 
 
-def engine_24_motion_graphics(script: Dict, idea: ShortIdea, brief: Dict, chart_data: Dict) -> Dict[str, Path]:
-    log.info("[24] Motion Graphics Engine — Remotion: AI-directed cinematic visuals")
-    outputs = {}
+def engine_24_shot_renderer(
+    script: Dict, idea: ShortIdea, brief: Dict, chart_data: Dict
+) -> tuple:
+    """Hollywood multi-shot renderer.
+    Renders each shot in brief["shot_list"] as an individual clip.
+    Returns (ordered_clips: List[Path], trading_chart_path: Optional[Path]).
+    """
+    log.info("[24] Shot Renderer — rendering each Hollywood shot individually")
 
-    # ── Pull remotion_spec from creative director output ──────────────────────
-    spec = brief.get("remotion_spec", {})
-    if not spec:
-        # Fallback spec if engine_15 didn't return one
-        spec = {
-            "layout": "cinematic_overlay",
-            "bg_gradient_start": "#0a0a1a",
-            "bg_gradient_end": "#000000",
-            "color_primary": "#f59e0b",
-            "color_secondary": "#ffffff",
-            "typography": "ultra_heavy",
-            "animation": "slam",
-            "grain": 0.3,
-            "vignette": 0.5,
-            "text_position": "left",
-            "hook_font_size": 100,
-            "sfx_profile": "impact",
-        }
+    shot_list = brief.get("shot_list", [])
+    spec      = brief.get("remotion_spec", {})
+    global_accent = spec.get("color_primary", "#f59e0b")
+    global_bg_s   = spec.get("bg_gradient_start", "#0a0a1a")
+    global_bg_e   = spec.get("bg_gradient_end", "#000000")
+    global_grain  = spec.get("grain", 0.3)
 
-    layout      = spec.get("layout", "cinematic_overlay")
-    hook_comp   = _LAYOUT_TO_HOOK_COMP.get(layout, "FilmCard")
-    stat_comp   = _LAYOUT_TO_STAT_COMP.get(layout, "ImpactStat")
-    color1      = spec.get("color_primary", "#f59e0b")
-    color2      = spec.get("color_secondary", "#ffffff")
-    bg_start    = spec.get("bg_gradient_start", "#0a0a1a")
-    bg_end      = spec.get("bg_gradient_end", "#000000")
-    typography  = spec.get("typography", "ultra_heavy")
-    animation   = spec.get("animation", "slam")
-    grain       = spec.get("grain", 0.3)
-    vignette    = spec.get("vignette", 0.5)
-    text_pos    = spec.get("text_position", "left")
-    font_size   = spec.get("hook_font_size", 100)
+    # Fallback: if no shot_list from engine_15, build a default 6-shot list
+    if not shot_list:
+        log.warning("  No shot_list from engine_15 — using 6-shot fallback")
+        structural = brief.get("structural_idea", "CONFESSION").upper()
+        _H = {"CONFESSION":"FilmCard","THRILLER":"GlitchHook","INVESTIGATION":"GlitchHook",
+              "IMPACT":"WordPunch","BROADCAST":"NewsFlash","WORD_PUNCH":"TypoSlam",
+              "SPLIT":"SplitReveal","EDITORIAL":"FilmCard"}
+        _S = {"CONFESSION":"ImpactStat","THRILLER":"WinLoseSlam","INVESTIGATION":"DataReveal",
+              "IMPACT":"WinLoseSlam","BROADCAST":"ImpactStat","WORD_PUNCH":"WinLoseSlam",
+              "SPLIT":"DataReveal","EDITORIAL":"DataReveal"}
+        hook_comp = _H.get(structural, "FilmCard")
+        stat_comp = _S.get(structural, "ImpactStat")
+        shot_list = [
+            {"id":1,"type":"nac_char","purpose":"hook","duration":4},
+            {"id":2,"type":"remotion","comp":hook_comp,"duration":3,
+             "text":script.get("hook_text","THE TRADE"),"sub_text":script.get("hook_subtext",""),
+             "bg_start":global_bg_s,"bg_end":global_bg_e,"accent":global_accent,"grain":global_grain},
+            {"id":3,"type":"remotion","comp":"TradingChart","duration":35,"bg_start":global_bg_s,"bg_end":global_bg_e,"accent":global_accent,"grain":global_grain},
+            {"id":4,"type":"remotion","comp":stat_comp,"duration":6,"bg_start":global_bg_s,"bg_end":global_bg_e,"accent":global_accent,"grain":global_grain},
+            {"id":5,"type":"remotion","comp":"CTACard","duration":5,"bg_start":"#0a0a0a","bg_end":"#000000","accent":"#f59e0b","grain":0.2},
+        ]
 
-    log.info(f"  Remotion layout: {layout} → hook={hook_comp} stat={stat_comp} color={color1}")
+    shots_dir = OUT / "shots"
+    shots_dir.mkdir(exist_ok=True)
+    ordered_clips: List[Path] = []
+    trading_chart_path: Optional[Path] = None
 
-    # ── Shared vis props (for preset fallback renders) ────────────────────────
-    vis = {
-        "colorPrimary":    color1,
-        "colorSecondary":  color2,
-        "bgGradientStart": bg_start,
-        "bgGradientEnd":   bg_end,
-        "typography":      typography,
-        "animation":       animation,
-        "grain":           grain,
-        "vignette":        vignette,
-        "textPosition":    text_pos,
-        "layout":          layout,
-    }
+    _STAT_COMPS = {"ImpactStat", "WinLoseSlam", "DataReveal"}
+    _TEXT_COMPS = {"FilmCard", "TypoSlam", "GlitchHook", "SplitReveal",
+                   "WordPunch", "NewsFlash", "CTACard"}
 
-    # ── Pull AI-generated visual programs ─────────────────────────────────────
-    hook_program = brief.get("hook_program", {})
-    stat_program = brief.get("stat_program", {})
+    for shot in shot_list:
+        sid   = shot.get("id", 0)
+        stype = shot.get("type", "remotion")
+        dur   = float(shot.get("duration", 2))
 
-    # Structural idea → unique composition + visual identity (overrides layout)
-    structural = brief.get("structural_idea", "").upper()
-    _STRUCTURAL_HOOK = {
-        "CONFESSION":    ("FilmCard",   {"bgGradientStart": "#180000", "bgGradientEnd": "#000000", "grain": 0.45, "vignette": 0.8}),
-        "THRILLER":      ("GlitchHook", {"bgGradientStart": "#04040c", "bgGradientEnd": "#000000", "grain": 0.5,  "vignette": 0.7}),
-        "INVESTIGATION": ("GlitchHook", {"bgGradientStart": "#020610", "bgGradientEnd": "#000000", "grain": 0.35, "vignette": 0.6}),
-        "IMPACT":        ("WordPunch",  {"bgGradientStart": "#0e0400", "bgGradientEnd": "#000000", "grain": 0.2,  "vignette": 0.5}),
-        "BROADCAST":     ("NewsFlash",  {"bgGradientStart": "#070002", "bgGradientEnd": "#000000", "grain": 0.15, "vignette": 0.4}),
-        "WORD_PUNCH":    ("TypoSlam",   {"bgGradientStart": "#0d0000", "bgGradientEnd": "#000000", "grain": 0.4,  "vignette": 0.7}),
-        "SPLIT":         ("SplitReveal",{"bgGradientStart": "#0a0000", "bgGradientEnd": "#000000", "grain": 0.3,  "vignette": 0.6}),
-        "EDITORIAL":     ("FilmCard",   {"bgGradientStart": "#080400", "bgGradientEnd": "#000000", "grain": 0.25, "vignette": 0.5}),
-    }
-    _STRUCTURAL_STAT = {
-        "CONFESSION":    "ImpactStat",
-        "THRILLER":      "WinLoseSlam",
-        "INVESTIGATION": "DataReveal",
-        "IMPACT":        "WinLoseSlam",
-        "BROADCAST":     "ImpactStat",
-        "WORD_PUNCH":    "WinLoseSlam",
-        "SPLIT":         "DataReveal",
-        "EDITORIAL":     "DataReveal",
-    }
-    if structural in _STRUCTURAL_HOOK:
-        hook_comp, struct_vis = _STRUCTURAL_HOOK[structural]
-        stat_comp = _STRUCTURAL_STAT[structural]
-        vis.update(struct_vis)
-        log.info(f"  → Structural override: {structural} → hook={hook_comp} stat={stat_comp}")
+        # ── NAC Character shot → copy/trim from PAI cache ────────────────────
+        if stype == "nac_char":
+            purpose = shot.get("purpose", "hook")
+            src_map = {
+                "hook":       OUT / "nac_perf_hook.mp4",
+                "analysis":   OUT / "nac_perf_analysis.mp4",
+                "conclusion": OUT / "nac_perf_conclusion.mp4",
+            }
+            src = src_map.get(purpose, OUT / "nac_perf_hook.mp4")
+            out = shots_dir / f"shot_{sid:03d}.mp4"
+            if not out.exists():
+                if src.exists():
+                    _run([
+                        "ffmpeg", "-y", "-i", str(src), "-t", str(dur),
+                        "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out),
+                    ], check=False)
+                else:
+                    log.warning(f"  NAC clip {purpose} not found — skipping shot {sid}")
+                    continue
+            if out.exists():
+                ordered_clips.append(out)
+                log.info(f"  [{sid:02d}] nac_char/{purpose} → {dur:.1f}s")
+            continue
 
-    # 1. Hook card (3s) — unique composition per structural idea
-    log.info(f"  → Rendering {hook_comp} for hook")
-    outputs["HookCard"] = _remotion_render(hook_comp, "hook.mp4", 90, {
-        "text":      script.get("hook_text", "THE AI KNEW"),
-        "subtext":   script.get("hook_subtext", ""),
-        "fontSize":  font_size,
-        "ticker":    idea.ticker,
-        "direction": idea.direction.upper(),
-        **vis,
-    })
+        # ── Remotion shot ─────────────────────────────────────────────────────
+        comp   = shot.get("comp", "FilmCard")
+        bg_s   = shot.get("bg_start", global_bg_s)
+        bg_e   = shot.get("bg_end",   global_bg_e)
+        accent = shot.get("accent",   global_accent)
+        grain  = shot.get("grain",    global_grain)
+        text   = shot.get("text",     "")
+        sub    = shot.get("sub_text", "")
+        frames = max(30, int(dur * 30))
+        fname  = f"shots/shot_{sid:03d}.mp4"
 
-    # 2. Trading chart (35s) — always rendered, themed with AI colors
-    chart_props = dict(chart_data)
-    chart_props["hudColor"]        = color1
-    chart_props["bgGradientStart"] = bg_start
-    chart_props["bgGradientEnd"]   = bg_end
-    chart_props["grain"]           = grain
-    chart_props["vignette"]        = vignette
-    outputs["TradingChart"] = _remotion_render("TradingChart", "trading_chart.mp4", 1050, chart_props)
+        if comp == "TradingChart":
+            props = dict(chart_data)
+            props.update({
+                "hudColor":        accent,
+                "bgGradientStart": bg_s,
+                "bgGradientEnd":   bg_e,
+                "grain":           grain,
+                "vignette":        0.5,
+            })
+            out = _remotion_render("TradingChart", "trading_chart.mp4", frames, props)
+            trading_chart_path = out
 
-    # 3. Stat card (6s) — use DynamicStat only if ≤6 layers (more = too slow)
-    stat_layers = stat_program.get("layers", [])
-    if stat_layers and len(stat_layers) <= 6:
-        log.info(f"  → Using DynamicStat for stat ({len(stat_layers)} layers)")
-        outputs["StatCard"] = _remotion_render("DynamicStat", "stat.mp4", 180, {
-            "program": stat_program,
-        })
-    else:
-        log.info(f"  → Using preset {stat_comp} for stat")
-        outputs["StatCard"] = _remotion_render(stat_comp, "stat.mp4", 180, {
-            "ticker":    idea.ticker,
-            "direction": idea.direction.upper(),
-            "score":     chart_data.get("score", 65),
-            "pnl":       idea.pnl,
-            **vis,
-        })
+        elif comp in _STAT_COMPS:
+            out = _remotion_render(comp, fname, frames, {
+                "ticker":          idea.ticker,
+                "direction":       idea.direction.upper(),
+                "score":           chart_data.get("score", 65),
+                "pnl":             idea.pnl,
+                "bgGradientStart": bg_s,
+                "bgGradientEnd":   bg_e,
+                "colorPrimary":    accent,
+                "grain":           grain,
+                "vignette":        0.6,
+            })
 
-    # 4. CTA card (5s)
-    outputs["CTACard"] = _remotion_render("CTACard", "cta_mg.mp4", 150, {
-        "handle": "@nacartha",
-        **vis,
-    })
+        else:
+            # FilmCard, TypoSlam, GlitchHook, SplitReveal, WordPunch, NewsFlash, CTACard, ...
+            out = _remotion_render(comp, fname, frames, {
+                "text":            text,
+                "subtext":         sub,
+                "fontSize":        96,
+                "ticker":          idea.ticker,
+                "direction":       idea.direction.upper(),
+                "bgGradientStart": bg_s,
+                "bgGradientEnd":   bg_e,
+                "colorPrimary":    accent,
+                "grain":           grain,
+                "vignette":        0.6,
+                "handle":          "@nacartha",  # used by CTACard
+            })
 
-    return outputs
+        if out.exists():
+            ordered_clips.append(out)
+            log.info(f"  [{sid:02d}] {comp:14s} → {dur:.1f}s  \"{text[:35]}\"")
+        else:
+            log.warning(f"  [{sid:02d}] {comp} FAILED — skipping")
+
+    log.info(f"  → {len(ordered_clips)} shots rendered")
+    return ordered_clips, trading_chart_path
 
 
 def engine_25_vfx(trading_chart_path: Path) -> Path:
@@ -1352,102 +1339,55 @@ def engine_27_music(brief: Dict) -> Path:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def engine_28_timeline(
-    motion_clips: Dict[str, Path],
-    nac_clip: Optional[Path],
-    chart_vfx: Path,
-    pai_clips: List[Path],
-    narration: Path,
-    nac_perf_clips: List[Path] = None,
+    shot_clips: List[Path],
+    chart_vfx: Optional[Path] = None,
     fmt: str = "short",
 ) -> Path:
-    log.info(f"[28] Timeline Engine — assembling {fmt} master timeline")
+    """Concatenate Hollywood shot clips into the master timeline.
+
+    shot_clips is the ordered list from engine_24_shot_renderer.
+    chart_vfx, if provided, replaces any trading_chart.mp4 in the list with the VFX version.
+    """
+    log.info(f"[28] Timeline Engine — assembling {len(shot_clips)}-shot Hollywood timeline")
     out = OUT / "timeline_raw.mp4"
     if out.exists():
         log.info("  [cache] timeline_raw.mp4")
         return out
 
-    nac_perf_clips = nac_perf_clips or []
-    concat_file    = OUT / "concat.txt"
-    ordered: List[Path] = []
-
-    def _add_clip(path: Optional[Path], label: str, trim_s: float = 0):
-        if not path or not path.exists():
-            return
-        if trim_s > 0:
-            tmp = OUT / f"trimmed_{path.stem}.mp4"
-            if not tmp.exists():
-                _run(["ffmpeg","-y","-i",str(path),"-t",str(trim_s),
-                      "-vf","scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
-                      "-c:v","libx264","-pix_fmt","yuv420p",str(tmp)])
-            ordered.append(tmp)
+    # Replace raw trading_chart with VFX-processed version if available
+    resolved: List[Path] = []
+    for clip in shot_clips:
+        if chart_vfx and chart_vfx.exists() and clip.name == "trading_chart.mp4":
+            resolved.append(chart_vfx)
+            log.info(f"  + chart_vfx.mp4 (VFX processed)")
         else:
-            ordered.append(path)
-        log.info(f"  + {label}")
+            resolved.append(clip)
+            log.info(f"  + {clip.name}")
 
-    # ── Hook composition — DynamicScene or preset ────────────────────────────
-    # DynamicScene trumps legacy HookCard if it was rendered
-    for hook_key in ("DynamicScene", "HookCard", "FilmCard", "TypoSlam",
-                     "GlitchHook", "SplitReveal", "WordPunch", "NewsFlash"):
-        if hook_key in motion_clips and motion_clips[hook_key].exists():
-            _add_clip(motion_clips[hook_key], f"{hook_key} (Remotion hook, 3s)")
-            break
+    if not resolved:
+        raise RuntimeError("[28] Timeline: no shot clips — all production engines failed")
 
-    # ── NAC hook reaction clip (engine_20 first clip, 4s) ───────────────────
-    if nac_perf_clips:
-        _add_clip(nac_perf_clips[0], "NAC hook reaction (PAI perf)", trim_s=4)
-
-    # ── PAI cinematic B-roll clip 1 (char-ref clip, 8s trimmed to 6s) ───────
-    if len(pai_clips) > 0:
-        _add_clip(pai_clips[0], f"PAI char-ref ({pai_clips[0].stem})", trim_s=6)
-
-    # ── NAC analysis clip (engine_20 second clip, 6s) ───────────────────────
-    if len(nac_perf_clips) > 1 and fmt == "long":
-        _add_clip(nac_perf_clips[1], "NAC analysis (PAI perf)", trim_s=6)
-
-    # ── Chart VFX (core trade explanation ~35s) ──────────────────────────────
-    _add_clip(chart_vfx, "Chart VFX (animated trading chart)", trim_s=0)
-
-    # ── PAI B-roll clip 2 (environment, 6s) — adds visual break ─────────────
-    if len(pai_clips) > 1:
-        _add_clip(pai_clips[1], f"PAI B-roll ({pai_clips[1].stem})", trim_s=6)
-
-    # ── Long format: NAC conclusion + more B-roll ────────────────────────────
-    if fmt == "long":
-        if len(nac_perf_clips) > 2:
-            _add_clip(nac_perf_clips[2], "NAC conclusion (PAI perf)", trim_s=4)
-        if len(pai_clips) > 2:
-            _add_clip(pai_clips[2], f"PAI B-roll 3 ({pai_clips[2].stem})", trim_s=6)
-
-    # ── Stat composition ─────────────────────────────────────────────────────
-    for stat_key in ("DynamicStat", "ImpactStat", "WinLoseSlam", "DataReveal", "StatCard"):
-        if stat_key in motion_clips and motion_clips[stat_key].exists():
-            _add_clip(motion_clips[stat_key], f"{stat_key} (Remotion stat, 6s)")
-            break
-
-    # ── CTA card ─────────────────────────────────────────────────────────────
-    _add_clip(motion_clips.get("CTACard"), "CTACard (Remotion CTA)")
-
-    if not ordered:
-        raise RuntimeError("[28] Timeline Engine: no clips to assemble — all production engines failed")
-
-    # Normalize all clips to 1080x1920 before concat
-    normalized = []
-    for i, clip in enumerate(ordered):
+    # Normalize all clips to 1080x1920 / 30fps / no audio
+    concat_file = OUT / "concat.txt"
+    normalized  = []
+    for i, clip in enumerate(resolved):
+        if not clip.exists():
+            log.warning(f"  Clip missing: {clip} — skipping")
+            continue
         norm = OUT / f"norm_{i:02d}.mp4"
         if not norm.exists():
             _run([
                 "ffmpeg", "-y", "-i", str(clip),
                 "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
-                "-r", "30", "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                "-an",  # strip audio - will add narration later
+                "-r", "30", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an",
                 str(norm),
             ])
-        normalized.append(norm)
+        if norm.exists():
+            normalized.append(norm)
 
     with open(concat_file, "w") as f:
         for p in normalized:
-            if Path(p).exists():
-                f.write(f"file '{p}'\n")
+            f.write(f"file '{p}'\n")
 
     _run([
         "ffmpeg", "-y",
@@ -1455,7 +1395,7 @@ def engine_28_timeline(
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30",
         str(out),
     ])
-    log.info(f"  → timeline_raw.mp4 ({_duration(out):.1f}s, {len(normalized)} clips)")
+    log.info(f"  → timeline_raw.mp4 ({_duration(out):.1f}s, {len(normalized)} shots)")
     return out
 
 
@@ -2511,8 +2451,8 @@ def main():
     _              = engine_21_student_performance()
     pai_clips      = engine_22_ai_visual_pai(asset_plan, idea, brief)
     chart_data     = engine_23_dashboard(idea)
-    motion_clips   = engine_24_motion_graphics(script, idea, brief, chart_data)
-    chart_vfx      = engine_25_vfx(motion_clips["TradingChart"])
+    shot_clips, chart_track = engine_24_shot_renderer(script, idea, brief, chart_data)
+    chart_vfx      = engine_25_vfx(chart_track) if chart_track else None
     sfx            = engine_26_sfx(brief, idea)
     music_path     = engine_27_music(brief)
 
@@ -2520,8 +2460,7 @@ def main():
     log.info("\n━━━━━━━━━━━━━━━━━━━ POST PRODUCTION ━━━━━━━━━━━━━━━━━━━━━━")
     narration = _generate_narration(script.get("full_narration", micro_story))
 
-    timeline      = engine_28_timeline(motion_clips, None, chart_vfx, pai_clips, narration,
-                                       nac_perf_clips=nac_perf_clips, fmt="short")
+    timeline      = engine_28_timeline(shot_clips, chart_vfx, fmt="short")
     camera        = engine_29_camera_motion(timeline, brief)
     captioned     = engine_30_caption(camera, script, brief)
     transitioned  = engine_31_transition(captioned)
@@ -2660,16 +2599,15 @@ def main_long() -> Optional[str]:
                 log.warning(f"  Extra B-roll {i+1} failed: {e}")
 
     chart_data   = engine_23_dashboard(idea)
-    motion_clips = engine_24_motion_graphics(script, idea, brief, chart_data)
-    chart_vfx    = engine_25_vfx(motion_clips["TradingChart"])
+    shot_clips, chart_track = engine_24_shot_renderer(script, idea, brief, chart_data)
+    chart_vfx    = engine_25_vfx(chart_track) if chart_track else None
     sfx          = engine_26_sfx(brief, idea)
     music_path   = engine_27_music(brief)
 
     # ── POST PRODUCTION ───────────────────────────────────────────────────────
     log.info("\n━━━━━━━━━━━━━━━━━ POST PRODUCTION (long) ━━━━━━━━━━━━━━━━━")
     narration    = _generate_narration(script.get("full_narration", micro_story))
-    timeline     = engine_28_timeline(motion_clips, None, chart_vfx, pai_clips, narration,
-                                      nac_perf_clips=nac_perf_clips, fmt="long")
+    timeline     = engine_28_timeline(shot_clips, chart_vfx, fmt="long")
     camera       = engine_29_camera_motion(timeline, brief)
     captioned    = engine_30_caption(camera, script, brief)
     transitioned = engine_31_transition(captioned)
@@ -2711,13 +2649,13 @@ def main_test() -> Path:
         "nac_perf_hook.mp4", "nac_perf_analysis.mp4", "nac_perf_conclusion.mp4",
         # Chart data — must refresh so candles are different each run
         "chart_data_TSLA.json", "chart_data_AAPL.json", "chart_data_NVDA.json",
-        # Remotion renders — must regenerate so new AI brief takes effect
+        # Legacy Remotion renders
         "hook.mp4", "stat.mp4", "cta_mg.mp4", "outro.mp4", "trading_chart.mp4",
         # Pipeline
         "timeline_raw.mp4", "camera.mp4", "chart_vfx.mp4",
         "captioned.mp4", "transitioned.mp4", "graded.mp4",
         "body.mp4", "final.mp4", "narration.mp3", "chart_move.mp3",
-        # SFX — regenerate each run so corrupted files don't persist
+        # SFX
         "screen_tap.mp3", "keyboard_typing.mp3", "keyboard_short.mp3",
         "mouse_click.mp3", "double_click.mp3", "trade_execute.mp3",
         "data_reveal.mp3", "chart_alert.mp3", "scroll.mp3",
@@ -2726,6 +2664,14 @@ def main_test() -> Path:
         _p = OUT / _f
         if _p.exists():
             _p.unlink()
+    # Wipe shots/ dir so every shot is re-rendered with fresh AI brief
+    _shots_dir = OUT / "shots"
+    if _shots_dir.exists():
+        _sl.rmtree(_shots_dir)
+    _shots_dir.mkdir(exist_ok=True)
+    # Wipe norm_ files (concat normalization from previous run)
+    for _nf in OUT.glob("norm_*.mp4"):
+        _nf.unlink()
 
     # ── INTELLIGENCE ──────────────────────────────────────────────────────────
     log.info("\n━━━━━━━━━━━━━━━━━━━ INTELLIGENCE LAYER ━━━━━━━━━━━━━━━━━━━")
@@ -2797,21 +2743,21 @@ def main_test() -> Path:
         src = _PAI_CACHE / "nac_perf_hook.mp4"
         if src.exists(): shutil.copy2(src, hook_clip)
 
-    nac_perf_clips = [OUT / f for f in ("nac_perf_hook.mp4", "nac_perf_analysis.mp4", "nac_perf_conclusion.mp4") if (OUT / f).exists()]
     _ = engine_21_student_performance()
     pai_clips = [OUT / "pai_clip_00.mp4"] if (OUT / "pai_clip_00.mp4").exists() else []
-    log.info(f"  [22] AI Visual — using {len(pai_clips)} cached B-roll clip(s)")
-    chart_data     = engine_23_dashboard(idea)
-    motion_clips   = engine_24_motion_graphics(script, idea, brief, chart_data)
-    chart_vfx      = engine_25_vfx(motion_clips["TradingChart"])
-    sfx            = engine_26_sfx(brief, idea)
-    music_path     = engine_27_music(brief)
+    log.info(f"  [22] AI Visual — {len(pai_clips)} cached B-roll clip(s)")
+    chart_data = engine_23_dashboard(idea)
+
+    # Hollywood multi-shot renderer — engine_24 now renders each shot individually
+    shot_clips, chart_track = engine_24_shot_renderer(script, idea, brief, chart_data)
+    chart_vfx    = engine_25_vfx(chart_track) if chart_track else None
+    sfx          = engine_26_sfx(brief, idea)
+    music_path   = engine_27_music(brief)
 
     # ── POST PRODUCTION ───────────────────────────────────────────────────────
     log.info("\n━━━━━━━━━━━━━━━━━━━ POST PRODUCTION ━━━━━━━━━━━━━━━━━━━━━━")
     narration    = _generate_narration(script.get("full_narration", micro_story))
-    timeline     = engine_28_timeline(motion_clips, None, chart_vfx, pai_clips, narration,
-                                      nac_perf_clips=nac_perf_clips, fmt="short")
+    timeline     = engine_28_timeline(shot_clips, chart_vfx, fmt="short")
     camera       = engine_29_camera_motion(timeline, brief)
     captioned    = engine_30_caption(camera, script, brief)
     transitioned = engine_31_transition(captioned)
